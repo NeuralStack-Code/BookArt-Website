@@ -127,26 +127,12 @@ $extraJs  = ['funcionModal.js'];
             <form class="recuperacion" id="reestablecerContra">
                 <h1>Recuperación de contraseña</h1>
                 <div class="contentR">
-                    <p>Ingresa tu correo electrónico</p>
-                    <input type="text" id="correoRecuperacion" name="correoRecupera" required>
+                    <p>Ingresa el correo de tu cuenta y te enviaremos un enlace para elegir una contraseña nueva.</p>
+                    <input type="email" id="correoRecuperacion" name="correoRecupera" autocomplete="email" required>
                     <p class="etiquetaError">Revisa tu correo electrónico</p>
-                    <div style="position:relative;margin-top:1.5rem;">
-                        <p>Ingresa tu nueva contraseña</p>
-                        <span id="imgVerContrasena3" class="material-symbols-outlined">visibility</span>
-                        <input id="pass3" type="password" name="recuperaContra" required>
-                        <p class="etiquetaContra">Debe contener 8 números, símbolos y mayúsculas</p>
-                        <p class="etiquetaCoincidenciaC">Las contraseñas no coinciden</p>
-                    </div>
-                    <div style="position:relative;margin-top:1.5rem;">
-                        <p>Confirma la contraseña</p>
-                        <span id="imgVerContrasena4" class="material-symbols-outlined">visibility</span>
-                        <input id="pass4" type="password" name="recuperaContra2" required>
-                        <p class="etiquetaContra">Debe contener 8 números, símbolos y mayúsculas</p>
-                        <p class="etiquetaCoincidenciaC">Las contraseñas no coinciden</p>
-                    </div>
                 </div>
                 <div class="btnReestablecer">
-                    <button type="submit" id="restabeceContra">Reestablecer</button>
+                    <button type="submit" id="restabeceContra">Enviar enlace</button>
                 </div>
             </form>
 

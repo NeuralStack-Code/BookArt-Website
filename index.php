@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/apiService/core/autoload.php';
 require_once __DIR__ . '/apiService/core/config.php';
 require_once __DIR__ . '/apiService/core/checkLicense.php';
 checkLicense();
@@ -32,6 +33,7 @@ $routes = [
     'productos'          => __DIR__ . '/webService/views/user/Productos.php',
     'carrito'            => __DIR__ . '/webService/views/user/Carrito.php',
     'inicio-sesion'      => __DIR__ . '/webService/views/user/Inicio_sesion.php',
+    'nueva-contrasena'   => __DIR__ . '/webService/views/user/NuevaContrasena.php',
     'mis-pedidos'        => __DIR__ . '/webService/views/user/MisPedidos.php',
     'personalizada'      => __DIR__ . '/webService/views/user/Personalizada.php',
     'extension-catalogo' => __DIR__ . '/webService/views/user/Extension_Catalogo.php',

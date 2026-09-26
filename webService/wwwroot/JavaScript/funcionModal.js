@@ -568,9 +568,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const btn = formRecuperar.querySelector('[type="submit"]');
             btn.disabled = true;
             try {
-                const res  = await fetch(BASE_URL + '/api/auth?action=reset-password', { method: 'POST', body: new FormData(formRecuperar) });
+                const res  = await fetch(BASE_URL + '/api/auth?action=forgot', { method: 'POST', body: new FormData(formRecuperar) });
                 const data = await res.json();
                 window.mostrarDialog((data.success ? '✅ ' : '❌ ') + data.message, data.success ? 'success' : 'error');
+                if (data.success) formRecuperar.reset();
             } catch {
                 window.mostrarDialog('❌ Error de conexión.', 'error');
             } finally {
