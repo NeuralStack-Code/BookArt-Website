@@ -7,17 +7,31 @@ namespace Composer\Autoload;
 class ComposerStaticInitf0edf879af7a01d40b4ea21cb1034038
 {
     public static $classMap = array (
-        'AuthBusiness' => __DIR__ . '/../..' . '/webService/business/auth/AuthBusiness.php',
         'AuthController' => __DIR__ . '/../..' . '/webService/controllers/AuthController.php',
         'CarritoBusiness' => __DIR__ . '/../..' . '/webService/business/carrito/CarritoBusiness.php',
         'CarritoController' => __DIR__ . '/../..' . '/webService/controllers/CarritoController.php',
+        'CarritoItem' => __DIR__ . '/../..' . '/webService/models/carrito/CarritoItem.php',
         'CatalogoBusiness' => __DIR__ . '/../..' . '/webService/business/catalogo/CatalogoBusiness.php',
         'CatalogoController' => __DIR__ . '/../..' . '/webService/controllers/CatalogoController.php',
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
-        'ContactoBusiness' => __DIR__ . '/../..' . '/webService/business/contacto/ContactoBusiness.php',
         'ContactoController' => __DIR__ . '/../..' . '/webService/controllers/ContactoController.php',
+        'CorreoContacto' => __DIR__ . '/../..' . '/webService/libs/CorreoContacto.php',
+        'CorreoRestablecer' => __DIR__ . '/../..' . '/webService/libs/CorreoRestablecer.php',
+        'Cuenta' => __DIR__ . '/../..' . '/webService/models/auth/Cuenta.php',
+        'CuentaBusiness' => __DIR__ . '/../..' . '/webService/business/auth/CuentaBusiness.php',
+        'Estadisticas' => __DIR__ . '/../..' . '/webService/models/pedidos/Estadisticas.php',
+        'ImagenCatalogo' => __DIR__ . '/../..' . '/webService/libs/ImagenCatalogo.php',
+        'ImagenPortada' => __DIR__ . '/../..' . '/webService/libs/ImagenPortada.php',
+        'ImagenSubida' => __DIR__ . '/../..' . '/webService/libs/ImagenSubida.php',
+        'Pedido' => __DIR__ . '/../..' . '/webService/models/pedidos/Pedido.php',
+        'PedidoDetalle' => __DIR__ . '/../..' . '/webService/models/pedidos/PedidoDetalle.php',
         'PedidosBusiness' => __DIR__ . '/../..' . '/webService/business/pedidos/PedidosBusiness.php',
         'PedidosController' => __DIR__ . '/../..' . '/webService/controllers/PedidosController.php',
+        'Personalizada' => __DIR__ . '/../..' . '/webService/models/personalizada/Personalizada.php',
+        'PersonalizadaBusiness' => __DIR__ . '/../..' . '/webService/business/personalizada/PersonalizadaBusiness.php',
+        'PersonalizadaController' => __DIR__ . '/../..' . '/webService/controllers/PersonalizadaController.php',
+        'Producto' => __DIR__ . '/../..' . '/webService/models/catalogo/Producto.php',
+        'ResetContrasenaBusiness' => __DIR__ . '/../..' . '/webService/business/auth/ResetContrasenaBusiness.php',
     );
 
     public static function getInitializer(ClassLoader $loader)

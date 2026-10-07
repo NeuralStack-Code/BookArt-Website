@@ -9,7 +9,9 @@
     "autoload": {
         "classmap": [
             "webService/controllers",
-            "webService/business"
+            "webService/business",
+            "webService/models",
+            "webService/libs"
         ]
     },
     "config": {
