@@ -59,11 +59,9 @@ function agregarAlCarritoCatalogo(idProducto, event) {
     const btn = event.target.closest('button');
 
     const formData = new FormData();
-    formData.append('action', 'add');
-    formData.append('tipo', 'catalogo');
-    formData.append('id', idProducto);
-    
-    fetch(api('/api/carrito'), {
+    formData.append('IdProducto', idProducto);
+
+    fetch(api('/carrito/agregar'), {
         method: 'POST',
         body: formData
     })

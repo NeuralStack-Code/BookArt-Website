@@ -1,191 +1,138 @@
 <?php
-
 /**
- * Recurso: pedidos.  Ruta: /api/pedidos?action=... (despacha por acción + método).
- * Acciones admin: admin-listar, admin-detalle, admin-estatus, admin-precio, estadisticas.
- * Usuario: mis pedidos (GET), checkout (POST), editar, cancel/DELETE.
+ * Pedidos ya realizados.
+ * Del cliente:
+ *   /pedidos/index         → pantalla "Mis pedidos"
+ *   /pedidos/cancelar      → cancela uno suyo (mientras esté pendiente o visto)
+ * Del administrador (su panel):
+ *   /pedidos/listar        → todos los pedidos
+ *   /pedidos/detalle       → un pedido completo
+ *   /pedidos/estatus       → cambia el estatus y deja un mensaje al cliente
+ *   /pedidos/precio        → cotiza una libreta personalizada
+ *   /pedidos/estadisticas  → los números del panel
+ * El pedido se realiza en CarritoController::confirmar(); el diseño de una libreta se cambia en PersonalizadaController.
+ * La URL anterior /mis-pedidos redirige a /pedidos (index.php raíz).
  */
-class PedidosController
+class PedidosController extends Controller
 {
-    private PedidosBusiness $pedidos;
+    protected array $readActions = ['index', 'listar', 'detalle', 'estadisticas'];
 
-    public function __construct(mysqli $conexion)
+    /** Lo que es del cliente; todo lo demás es del administrador. */
+    private const CUSTOMER_ACTIONS = ['cancelar'];
+
+    public function authorize(string $action): void
     {
-        requireAuth();
-        $this->pedidos = new PedidosBusiness($conexion);
+        if ($action === 'index') {
+            $this->customerScreen();
+            return;
+        }
+        parent::authorize($action);
+        if (in_array($action, self::CUSTOMER_ACTIONS, true)) $this->requireCustomer();
+        else $this->requireAdmin();
     }
 
-    private function idCuenta(): int
-    {
-        if (!empty($_SESSION['id_cuenta'])) return (int) $_SESSION['id_cuenta'];
-        response(401, false, 'Sesión no válida. Inicia sesión nuevamente.');
-    }
+    /* ── Cliente ── */
 
     public function index(): void
     {
-        $action = trim($_GET['action'] ?? '');
-        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        $this->api->command('Pedidos', 'Pedidos', 'Mine');
+        $this->api->addParameter('IdCuenta', 'I', $this->accountId());
+        $result = $this->api->execute();
 
-        $esAdmin = in_array($action, ['admin-listar', 'admin-detalle', 'admin-estatus', 'admin-precio', 'estadisticas']);
-        if ($esAdmin) requireAdmin(); else requireUser();
-
-        match (true) {
-            $action === 'admin-listar'  => $this->adminListar(),
-            $action === 'admin-detalle' => $this->adminDetalle(),
-            $action === 'admin-estatus' => $this->adminEstatus($method),
-            $action === 'admin-precio'  => $this->adminPrecio($method),
-            $action === 'estadisticas'  => $this->estadisticas(),
-            $action === 'editar'        => $this->editarPedido($method),
-            $action === 'cancel'        => $this->cancelarPedido(),
-            $method === 'GET'           => $this->misPedidos(),
-            $method === 'POST'          => $this->checkout(),
-            $method === 'DELETE'        => $this->cancelarPedido(),
-            default                     => response(405, false, 'Acción no válida.'),
-        };
-    }
-
-    /* ---------------- Usuario ---------------- */
-
-    private function misPedidos(): void
-    {
-        response(200, true, 'OK', ['pedidos' => $this->pedidos->misPedidos($this->idCuenta())]);
-    }
-
-    private function checkout(): void
-    {
-        $uid = $this->idCuenta();
-        if ($this->pedidos->contarCarrito($uid) == 0) response(422, false, 'No hay productos en el carrito.');
-
-        $filas = $this->pedidos->checkout($uid);
-        if ($filas > 0) response(200, true, 'Pedido realizado con éxito.', ['pedidos_procesados' => $filas]);
-        response(500, false, 'No se pudo procesar el pedido.');
-    }
-
-    private function cancelarPedido(): void
-    {
-        $uid = $this->idCuenta();
-        $id  = filter_var($_POST['id'] ?? $_GET['id'] ?? 0, FILTER_VALIDATE_INT);
-        if (!$id || $id <= 0) response(422, false, 'ID de pedido inválido.');
-
-        $pedido = $this->pedidos->pedidoCancelable($id, $uid);
-        if (!$pedido) response(404, false, 'Pedido no encontrado o no se puede cancelar.');
-
-        if ($this->pedidos->cancelar($id)) response(200, true, 'Pedido cancelado correctamente.');
-        response(500, false, 'Error al cancelar el pedido.');
-    }
-
-    private function editarPedido(string $method): void
-    {
-        if ($method !== 'POST') response(405, false, 'Método no permitido.');
-
-        $uid             = $this->idCuenta();
-        $idPedido        = isset($_POST['idPedido'])        ? intval($_POST['idPedido'])        : 0;
-        $idPersonalizada = isset($_POST['idPersonalizada']) ? intval($_POST['idPersonalizada']) : 0;
-        $opcion      = trim($_POST['opcFinal']    ?? '');
-        $tamanio     = trim($_POST['tamaño']      ?? '');
-        $tipoPapel   = trim($_POST['tipoPapel']   ?? '');
-        $color       = trim($_POST['color']       ?? '');
-        $descripcion = trim($_POST['descripcion'] ?? '');
-
-        if ($idPedido <= 0 || $idPersonalizada <= 0) response(422, false, 'IDs de pedido no válidos.');
-        if ($opcion === '' || $tamanio === '' || $tipoPapel === '' || $color === '' || $descripcion === '') {
-            response(422, false, 'Todos los campos son obligatorios.');
+        if (!$result->status()) {
+            $this->view('user/MisPedidos', ['pedidos' => Pedido::fromTable($result->table())]);
+        } else {
+            $this->failure($result);
         }
+    }
 
-        $pedido = $this->pedidos->pedidoEditable($idPedido, $uid);
-        if (!$pedido) response(404, false, 'Pedido no encontrado.');
-        if (!in_array(strtolower($pedido['estatus']), ['pendiente', 'visto'])) response(409, false, 'Este pedido ya no puede editarse.');
+    public function cancelar(int $IdPedido): void
+    {
+        $this->api->command('Pedidos', 'Pedidos', 'Cancel');
+        $this->api->addParameter('IdCuenta', 'I', $this->accountId());
+        $this->api->addParameter('IdPedido', 'I', $IdPedido);
+        $result = $this->api->execute();
 
-        $portadaUrl = null;
-        if (isset($_FILES['portada']) && $_FILES['portada']['error'] === UPLOAD_ERR_OK) {
-            $r = $this->procesarPortada($_FILES['portada']);
-            if (!$r['success']) response(422, false, $r['message']);
-            $portadaUrl = $r['url'];
-            // Borrar portada anterior
-            $old = $this->pedidos->portadaDePersonalizada($idPersonalizada);
-            if (!empty($old)) {
-                $fs = dirname(__DIR__, 2) . $old;
-                if (file_exists($fs)) unlink($fs);
-            }
+        if (!$result->status()) {
+            $this->ensure($result->affected() > 0, 'Pedido no encontrado o no se puede cancelar.', 404);
+            $this->success('Pedido cancelado correctamente.');
+        } else {
+            $this->failure($result);
         }
+    }
 
-        if ($this->pedidos->editarPersonalizada($idPersonalizada, $color, $descripcion, $tamanio, $opcion, $tipoPapel, $portadaUrl)) {
-            response(200, true, 'Pedido actualizado correctamente.', ['redirect' => '/mis-pedidos']);
+    /* ── Administrador ── */
+
+    public function listar(): void
+    {
+        $this->api->command('Pedidos', 'Pedidos', 'List');
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->success('OK', ['pedidos' => Pedido::fromTable($result->table())]);
+        } else {
+            $this->failure($result);
         }
-        response(500, false, 'Error al actualizar el pedido.');
     }
 
-    /* ---------------- Admin ---------------- */
-
-    private function adminListar(): void
+    public function detalle(int $IdPedido): void
     {
-        response(200, true, 'OK', ['pedidos' => $this->pedidos->adminListar()]);
+        $this->api->command('Pedidos', 'Pedidos', 'Get');
+        $this->api->addParameter('IdPedido', 'I', $IdPedido);
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->ensure($result->row() !== null, 'Pedido no encontrado.', 404);
+            $this->success('OK', ['pedido' => PedidoDetalle::fromRow($result->row())]);
+        } else {
+            $this->failure($result);
+        }
     }
 
-    private function adminDetalle(): void
+    public function estatus(int $IdPedido, string $Estatus = '', string $Mensaje = ''): void
     {
-        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-        if ($id <= 0) response(422, false, 'ID no válido.');
-        $pedido = $this->pedidos->adminDetalle($id);
-        if (!$pedido) response(404, false, 'Pedido no encontrado.');
-        response(200, true, 'OK', ['pedido' => $pedido]);
+        $this->ensure(in_array($Estatus, Pedido::ADMIN_STATUSES, true), 'Estatus no válido.');
+        $this->ensure((bool) preg_match('/^.{0,250}$/us', $Mensaje), 'El mensaje admite máximo 250 caracteres.');
+
+        $this->api->command('Pedidos', 'Pedidos', 'SetStatus');
+        $this->api->addParameter('IdPedido', 'I', $IdPedido);
+        $this->api->addParameter('Estatus',  'S', $Estatus);
+        $this->api->addParameter('Mensaje',  'S', $Mensaje);
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->success("Estatus actualizado a: $Estatus.");
+        } else {
+            $this->failure($result);
+        }
     }
 
-    private function adminEstatus(string $method): void
+    /** $Precio llega como texto para revisar que sí sea un número. */
+    public function precio(int $IdPedido, string $Precio = ''): void
     {
-        if ($method !== 'PUT') response(405, false, 'Método no permitido.');
-        parse_str(file_get_contents('php://input'), $input);
-        $id      = isset($input['pedidoId']) ? intval($input['pedidoId']) : 0;
-        $estatus = trim($input['estatus'] ?? '');
-        $mensaje = trim($input['mensaje'] ?? '');
+        $this->ensure(is_numeric($Precio) && $Precio >= 0 && $Precio < 100000000, 'Precio no válido.');
 
-        $validos = ['pendiente', 'visto', 'aprobado', 'declinado', 'proceso', 'terminado', 'entregado'];
-        if (!in_array($estatus, $validos)) response(422, false, 'Estatus no válido.');
+        $this->api->command('Pedidos', 'Pedidos', 'SetPrice');
+        $this->api->addParameter('IdPedido', 'I', $IdPedido);
+        $this->api->addParameter('Precio',   'N', $Precio);
+        $result = $this->api->execute();
 
-        if ($this->pedidos->adminEstatus($id, $estatus, $mensaje)) response(200, true, "Estatus actualizado a: $estatus.");
-        response(500, false, 'Error al actualizar estatus.');
+        if (!$result->status()) {
+            $this->success('Precio asignado: ' . money($Precio));
+        } else {
+            $this->failure($result);
+        }
     }
 
-    private function adminPrecio(string $method): void
+    public function estadisticas(): void
     {
-        if ($method !== 'PUT') response(405, false, 'Método no permitido.');
-        parse_str(file_get_contents('php://input'), $input);
-        $idPedido = isset($input['pedidoId']) ? intval($input['pedidoId']) : 0;
-        $precio   = $input['precio'] ?? '';
+        $this->api->command('Pedidos', 'Pedidos', 'Statistics');
+        $result = $this->api->execute();
 
-        if (!is_numeric($precio) || $precio < 0) response(422, false, 'Precio no válido.');
-
-        $row = $this->pedidos->pedidoParaPrecio($idPedido);
-        if (!$row)                     response(404, false, 'Pedido no encontrado.');
-        if ($row['idTipoPedido'] != 2) response(422, false, 'Solo se puede asignar precio a libretas personalizadas.');
-
-        $precioFloat = floatval($precio);
-        if ($this->pedidos->asignarPrecio((int) $row['idPersonalizada'], $precioFloat)) response(200, true, 'Precio asignado: $' . number_format($precioFloat, 2));
-        response(500, false, 'Error al asignar precio.');
-    }
-
-    private function estadisticas(): void
-    {
-        response(200, true, 'OK', $this->pedidos->estadisticas());
-    }
-
-    private function procesarPortada(array $file): array
-    {
-        if ($file['size'] > 5 * 1024 * 1024)
-            return ['success' => false, 'message' => 'La portada no debe superar 5MB.'];
-
-        $permitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-        if (!in_array($file['type'], $permitidos))
-            return ['success' => false, 'message' => 'Formato de imagen no válido (jpg, png, webp).'];
-
-        $ext     = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $nombre  = uniqid('portada_') . '.' . $ext;
-        $carpeta = dirname(__DIR__, 2) . '/wwwroot/portadas/';
-
-        if (!is_dir($carpeta)) mkdir($carpeta, 0755, true);
-        if (!move_uploaded_file($file['tmp_name'], $carpeta . $nombre))
-            return ['success' => false, 'message' => 'Error al guardar la portada.'];
-
-        return ['success' => true, 'url' => '/wwwroot/portadas/' . $nombre];
+        if (!$result->status()) {
+            $this->success('OK', ['estadisticas' => Estadisticas::fromRow($result->row() ?? [])]);
+        } else {
+            $this->failure($result);
+        }
     }
 }

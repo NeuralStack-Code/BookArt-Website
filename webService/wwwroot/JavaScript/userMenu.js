@@ -23,13 +23,13 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function cargarContadorCarrito() {
-    fetch(api('/api/carrito?action=count'))
+    fetch(api('/carrito/contar'))
         .then(r => r.json())
-        .then(data => {
-            if (data.success && data.count > 0) {
+        .then(result => {
+            if (result.success && result.data.count > 0) {
                 const badge = document.querySelector('.user-menu-badge');
                 if (badge) {
-                    badge.textContent = data.count;
+                    badge.textContent = result.data.count;
                     badge.style.display = 'block';
                 }
             }
@@ -66,10 +66,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function agregarAlCarritoCatalogo(idProducto) {
     const formData = new FormData();
-    formData.append('tipo', 'catalogo');
-    formData.append('id', idProducto);
+    formData.append('IdProducto', idProducto);
 
-    fetch(api('/api/carrito'), { method: 'POST', body: formData })
+    fetch(api('/carrito/agregar'), { method: 'POST', body: formData })
         .then(r => r.json())
         .then(data => {
             if (data.success) {

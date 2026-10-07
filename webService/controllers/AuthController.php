@@ -2,145 +2,181 @@
 require_once dirname(__DIR__, 2) . '/apiService/core/mail.php';   // enviarCorreo() → api central
 
 /**
- * Recurso: auth.  Ruta: /api/auth?action=login|register|logout|forgot|reset
- * Cuentas de BookArt (permiso: 1 = admin, 2 = usuario).
+ * Cuentas de BookArt: inicio de sesión, registro y recuperar contraseña (permiso: 1 = admin, 2 = usuario).
+ * Una pantalla y su formulario comparten la URL: GET pinta la pantalla, POST hace la acción.
+ *   /auth/entrar       → pantalla de sesión (entrar, crear cuenta, olvidé mi contraseña) · POST inicia sesión
+ *   /auth/registrar    → crea la cuenta
+ *   /auth/recuperar    → manda el enlace para restablecer la contraseña
+ *   /auth/restablecer  → pantalla del enlace (?Token=) · POST guarda la contraseña nueva
+ *   /auth/salir        → cierra la sesión
+ * Las URLs anteriores (/inicio-sesion, /nueva-contrasena) redirigen aquí (index.php raíz).
  */
-class AuthController
+class AuthController extends Controller
 {
-    private AuthBusiness $auth;
-    private string       $method;
+    /** Vigencia del enlace para restablecer la contraseña (minutos). */
+    private const RESET_MINUTES = 60;
+    /** Tiempo que debe pasar para mandarle otro enlace a la misma cuenta (minutos). */
+    private const RESET_WAIT_MINUTES = 2;
 
-    public function __construct(mysqli $conexion)
+    /** Acciones que también son pantalla (GET la pinta, POST hace la acción). */
+    private const SCREENS = ['entrar', 'restablecer'];
+
+    /** Aquí todavía no hay sesión que exigir: las pantallas aceptan GET y todo lo demás es POST. */
+    public function authorize(string $action): void
     {
-        $this->auth   = new AuthBusiness($conexion);
-        $this->method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        if (in_array($action, self::SCREENS, true) && $this->method === 'GET') return;
+        $this->requirePost();
     }
 
-    /** Despacha por ?action (el router siempre entra por index). */
-    public function index(): void
+    public function entrar(string $Usuario = '', string $Contrasena = ''): void
     {
-        match (trim($_GET['action'] ?? '')) {
-            'login'    => $this->login(),
-            'register' => $this->register(),
-            'logout'   => $this->logout(),
-            'forgot'   => $this->forgot(),
-            'reset'    => $this->reset(),
-            default    => response(404, false, 'Acción no encontrada.'),
-        };
-    }
-
-    public function login(): void
-    {
-        if ($this->method !== 'POST') response(405, false, 'Método no permitido.');
-
-        $usuario = trim($_POST['sesionUsuario'] ?? '');
-        $contra  = trim($_POST['sesionContra']  ?? '');
-        if ($usuario === '' || $contra === '') response(422, false, 'Usuario y contraseña son obligatorios.');
-
-        $row = $this->auth->autenticar($usuario, hash('sha512', $contra));
-        if (!$row) response(401, false, 'Usuario o contraseña incorrectos.');
-
-        $_SESSION['usuario']   = $row['usuario'] ?: $row['correo'];
-        $_SESSION['correo']    = $row['correo'];
-        $_SESSION['permiso']   = $row['permiso_id'];
-        $_SESSION['id_cuenta'] = $row['id_cuenta'];
-
-        $redirect = $row['permiso_id'] == 1 ? '/administrador' : '/catalogo';
-        response(200, true, 'Sesión iniciada.', ['redirect' => $redirect, 'permiso' => (int) $row['permiso_id']]);
-    }
-
-    public function register(): void
-    {
-        if ($this->method !== 'POST') response(405, false, 'Método no permitido.');
-
-        $campos = ['nombre', 'paterno', 'materno', 'tel', 'Dia', 'Mes', 'anio', 'usuario', 'correo', 'contrasena'];
-        $data = [];
-        foreach ($campos as $campo) {
-            $val = trim($_POST[$campo] ?? '');
-            if ($val === '') response(422, false, "El campo '$campo' es obligatorio.");
-            $data[$campo] = $val;
+        if ($this->method === 'GET') {
+            if ($this->user() !== null) $this->redirect($this->isAdmin() ? '/administrador' : '/');
+            $this->view('user/Inicio_sesion');
+            return;
         }
-        if (!filter_var($data['correo'], FILTER_VALIDATE_EMAIL)) response(422, false, 'El correo no es válido.');
 
-        if ($this->auth->correoExiste($data['correo']))   response(409, false, 'Este correo ya está registrado.');
-        if ($this->auth->usuarioExiste($data['usuario'])) response(409, false, 'Este nombre de usuario ya está registrado.');
+        $this->ensure($Usuario !== '' && $Contrasena !== '', 'Usuario y contraseña son obligatorios.');
 
-        $idUsuario = $this->auth->crearUsuario($data);
-        $hash      = hash('sha512', $data['contrasena']);
-        if (!$this->auth->crearCuenta($data['usuario'], $data['correo'], $hash, 2, $idUsuario)) {
-            $this->auth->eliminarUsuario($idUsuario); // rollback
-            response(500, false, 'Error al crear la cuenta.');
+        $this->api->command('Auth', 'Cuenta', 'Authenticate');
+        $this->api->addParameter('Usuario',    'S', $Usuario);
+        $this->api->addParameter('Contrasena', 'S', hash('sha512', $Contrasena));
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->ensure($result->row() !== null, 'Usuario o contraseña incorrectos.', 401);
+            $cuenta = Cuenta::fromRow($result->row());
+
+            session_regenerate_id(true);
+            $_SESSION['usuario']   = $cuenta->Usuario ?: $cuenta->Correo;
+            $_SESSION['correo']    = $cuenta->Correo;
+            $_SESSION['permiso']   = $cuenta->IdPermiso;
+            $_SESSION['id_cuenta'] = $cuenta->IdCuenta;
+
+            $this->success('Sesión iniciada.', ['redirect' => $cuenta->homePath(), 'permiso' => $cuenta->IdPermiso]);
+        } else {
+            $this->failure($result);
         }
-        response(201, true, '¡Cuenta creada exitosamente!');
     }
 
-    public function logout(): void
+    public function registrar(Cuenta $cuenta, string $Contrasena = '', string $ConfirmaContrasena = ''): void
     {
-        if ($this->method !== 'POST') response(405, false, 'Método no permitido.');
-        $_SESSION = [];
-        session_destroy();
-        response(200, true, 'Sesión cerrada.', ['redirect' => '/inicio-sesion']);
+        // El apellido materno nunca es obligatorio.
+        $required = ['Nombre' => 'el nombre', 'Paterno' => 'el apellido paterno', 'Telefono' => 'el teléfono',
+                     'Usuario' => 'el nombre de usuario', 'Correo' => 'el correo'];
+        foreach ($required as $field => $label) {
+            $this->ensure($cuenta->{$field} !== '', "Falta $label.");
+        }
+        // Los tamaños son los de las columnas (usuario y cuenta): lo que no cabe se rechaza aquí, no se recorta en la base.
+        $fits = fn(?string $text, int $max): bool => (bool) preg_match('/^.{0,' . $max . '}$/us', (string) $text);
+        $this->ensure($fits($cuenta->Nombre, 15) && $fits($cuenta->Paterno, 15) && $fits($cuenta->Materno, 15),
+                      'El nombre y los apellidos admiten máximo 15 caracteres cada uno.');
+        $this->ensure($fits($cuenta->Usuario, 15), 'El nombre de usuario admite máximo 15 caracteres.');
+        $this->ensure((bool) preg_match('/^\d{10}$/', $cuenta->Telefono), 'El teléfono debe tener 10 dígitos.');
+        $this->ensure(filter_var($cuenta->Correo, FILTER_VALIDATE_EMAIL) !== false && $fits($cuenta->Correo, 50),
+                      'El correo no es válido.');
+        $this->ensure($cuenta->Anio >= 1930 && $cuenta->Anio <= (int) date('Y') && checkdate($cuenta->Mes, $cuenta->Dia, $cuenta->Anio),
+                      'La fecha de nacimiento no es válida.');
+        $this->ensure($Contrasena === $ConfirmaContrasena, 'Las contraseñas no coinciden.');
+        $this->ensure($this->isStrongPassword($Contrasena), 'La contraseña debe tener al menos 8 caracteres, con letras y números.');
+
+        $this->api->command('Auth', 'Cuenta', 'Insert');
+        $this->api->addParameter('Nombre',     'S', $cuenta->Nombre);
+        $this->api->addParameter('Paterno',    'S', $cuenta->Paterno);
+        $this->api->addParameter('Materno',    'S', $cuenta->Materno);
+        $this->api->addParameter('Telefono',   'S', $cuenta->Telefono);
+        $this->api->addParameter('Dia',        'I', $cuenta->Dia);
+        $this->api->addParameter('Mes',        'I', $cuenta->Mes);
+        $this->api->addParameter('Anio',       'I', $cuenta->Anio);
+        $this->api->addParameter('Usuario',    'S', $cuenta->Usuario);
+        $this->api->addParameter('Correo',     'S', $cuenta->Correo);
+        $this->api->addParameter('Contrasena', 'S', hash('sha512', $Contrasena));
+        $this->api->addParameter('IdPermiso',  'I', 2);
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->success('¡Cuenta creada exitosamente!', [], 201);
+        } else {
+            $this->failure($result);
+        }
     }
 
-    /** Paso 1: pide el correo y, si existe, manda un enlace con token de un solo uso (1 hora). */
-    public function forgot(): void
+    /** Paso 1: pide el correo y, si existe, manda un enlace con token de un solo uso. */
+    public function recuperar(string $Correo = ''): void
     {
-        if ($this->method !== 'POST') response(405, false, 'Método no permitido.');
-
-        $correo = trim($_POST['correoRecupera'] ?? '');
-        if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) response(422, false, 'El correo no es válido.');
+        $this->ensure(filter_var($Correo, FILTER_VALIDATE_EMAIL) !== false, 'El correo no es válido.');
 
         // Misma respuesta exista o no el correo, y aunque se limite el reenvío (evita enumerar cuentas).
-        $generico = 'Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña.';
+        $generic = 'Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña.';
 
-        $idCuenta = $this->auth->idCuentaPorCorreo($correo);
-        if (!$idCuenta || $this->auth->resetReciente($idCuenta, 2)) response(200, true, $generico);
+        $this->api->command('Auth', 'Cuenta', 'ByEmail');
+        $this->api->addParameter('Correo', 'S', $Correo);
+        $result = $this->api->execute();
+        if ($result->status()) $this->failure($result);
+        if ($result->row() === null) $this->success($generic);
+        $cuenta = Cuenta::fromRow($result->row());
+
+        $this->api->command('Auth', 'ResetContrasena', 'Recent');
+        $this->api->addParameter('IdCuenta', 'I', $cuenta->IdCuenta);
+        $this->api->addParameter('Minutos',  'I', self::RESET_WAIT_MINUTES);
+        $result = $this->api->execute();
+        if ($result->status()) $this->failure($result);
+        if ($result->row() !== null) $this->success($generic);
 
         $token = bin2hex(random_bytes(32));
-        if (!$this->auth->crearReset($idCuenta, hash('sha256', $token), 60)) {
-            response(500, false, 'No se pudo generar el enlace. Intenta de nuevo.');
-        }
+        $this->api->command('Auth', 'ResetContrasena', 'Insert');
+        $this->api->addParameter('IdCuenta',  'I', $cuenta->IdCuenta);
+        $this->api->addParameter('TokenHash', 'S', hash('sha256', $token));
+        $this->api->addParameter('Minutos',   'I', self::RESET_MINUTES);
+        $result = $this->api->execute();
+        if ($result->status()) response(500, false, 'No se pudo generar el enlace. Intenta de nuevo.');
 
         // Dominio fijo (APP_URL o producción), nunca el Host de la petición: evita que el enlace apunte a otro sitio.
-        $origen = rtrim($_ENV['APP_URL'] ?? 'https://bookartencuadernaciones.com', '/');
-        $link   = $origen . BASE_URL . '/nueva-contrasena?token=' . $token;
+        $origin = rtrim($_ENV['APP_URL'] ?? 'https://bookartencuadernaciones.com', '/');
+        $link   = $origin . BASE_URL . '/auth/restablecer?Token=' . $token;
 
-        $cuerpo = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>'
-                . '<body style="font-family:Arial,sans-serif;background:#FFF9F0;padding:2rem;">'
-                . '<div style="max-width:520px;margin:0 auto;background:#fff;border:3px solid #4A3830;padding:2rem;">'
-                . '<h2 style="color:#4A3830;margin-top:0;">Restablece tu contraseña</h2>'
-                . '<p style="color:#4A3830;line-height:1.6;">Recibimos una solicitud para cambiar la contraseña de tu cuenta en BookArt Encuadernaciones.</p>'
-                . '<p style="margin:1.5rem 0;"><a href="' . htmlspecialchars($link) . '" style="background:#1E9332;color:#fff;padding:.8rem 1.6rem;text-decoration:none;font-weight:700;border:3px solid #4A3830;display:inline-block;">Elegir nueva contraseña</a></p>'
-                . '<p style="color:#7A6A60;font-size:.85rem;">El enlace vence en 1 hora y solo funciona una vez. Si no pediste este cambio, ignora este correo: tu contraseña sigue igual.</p>'
-                . '</div></body></html>';
+        $error = enviarCorreo($cuenta->Correo, CorreoRestablecer::SUBJECT, CorreoRestablecer::body($link));
+        if ($error !== '') error_log('[BookArt recuperar] ' . $error);
 
-        $err = enviarCorreo($correo, 'Restablece tu contraseña · BookArt', $cuerpo);
-        if ($err !== '') error_log('[BookArt forgot] ' . $err);
-
-        response(200, true, $generico);
+        $this->success($generic);
     }
 
-    /** Paso 2: con el token del correo, guarda la nueva contraseña. Sin token válido no cambia nada. */
-    public function reset(): void
+    /** Paso 2: con el token del correo, guarda la contraseña nueva. Sin token válido no cambia nada. */
+    public function restablecer(string $Token = '', string $Contrasena = '', string $ConfirmaContrasena = ''): void
     {
-        if ($this->method !== 'POST') response(405, false, 'Método no permitido.');
+        $validToken = (bool) preg_match('/^[a-f0-9]{64}$/', $Token);
 
-        $token    = trim($_POST['token'] ?? '');
-        $nueva    = trim($_POST['recuperaContra']  ?? '');   // login y registro también recortan
-        $confirma = trim($_POST['recuperaContra2'] ?? '');
-
-        if (!preg_match('/^[a-f0-9]{64}$/', $token)) response(400, false, 'El enlace no es válido. Pide uno nuevo.');
-        if ($nueva !== $confirma)                    response(422, false, 'Las contraseñas no coinciden.');
-        if (strlen($nueva) < 8 || !preg_match('/[A-Za-z]/', $nueva) || !preg_match('/[0-9]/', $nueva)) {
-            response(422, false, 'La contraseña debe tener al menos 8 caracteres, con letras y números.');
+        if ($this->method === 'GET') {
+            $this->view('user/NuevaContrasena', ['token' => $Token, 'validToken' => $validToken]);
+            return;
         }
 
-        $idCuenta = $this->auth->consumirReset(hash('sha256', $token));
-        if (!$idCuenta) response(400, false, 'El enlace no es válido, ya se usó o venció. Pide uno nuevo.');
+        $this->ensure($validToken, 'El enlace no es válido. Pide uno nuevo.', 400);
+        $this->ensure($Contrasena === $ConfirmaContrasena, 'Las contraseñas no coinciden.');
+        $this->ensure($this->isStrongPassword($Contrasena), 'La contraseña debe tener al menos 8 caracteres, con letras y números.');
 
-        if (!$this->auth->actualizarPassword($idCuenta, hash('sha512', $nueva))) {
-            response(500, false, 'No se pudo actualizar la contraseña. Pide un enlace nuevo.');
+        $this->api->command('Auth', 'ResetContrasena', 'Redeem');
+        $this->api->addParameter('TokenHash',  'S', hash('sha256', $Token));
+        $this->api->addParameter('Contrasena', 'S', hash('sha512', $Contrasena));
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->success('Tu contraseña se actualizó. Ya puedes iniciar sesión.', ['redirect' => '/auth/entrar']);
+        } else {
+            $this->failure($result);
         }
-        response(200, true, 'Tu contraseña se actualizó. Ya puedes iniciar sesión.', ['redirect' => '/inicio-sesion']);
+    }
+
+    public function salir(): void
+    {
+        $_SESSION = [];
+        session_destroy();
+        $this->success('Sesión cerrada.', ['redirect' => '/auth/entrar']);
+    }
+
+    /** Al menos 8 caracteres, con letras y números. */
+    private function isStrongPassword(string $password): bool
+    {
+        return strlen($password) >= 8 && preg_match('/[A-Za-z]/', $password) && preg_match('/[0-9]/', $password);
     }
 }

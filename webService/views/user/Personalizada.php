@@ -1,8 +1,5 @@
 <?php
-if (!isset($_SESSION['usuario'])) {
-    header('Location: /inicio-sesion'); exit;
-}
-
+/** Pantalla para diseñar una libreta. La pinta PersonalizadaController::index(). Los campos se llaman como la propiedad de Personalizada. */
 $title   = '¡Personaliza tu libreta! - BookArt';
 $extraJs = ['userMenu.js', 'funcionModal.js', 'personalizada.js'];
 ?>
@@ -29,11 +26,11 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'personalizada.js'];
             <div class="btnModal"><button id="btnAcept">Aceptar</button></div>
         </dialog>
 
-        <form action="/api/carrito" method="post" enctype="multipart/form-data">
+        <form id="formPersonalizada" enctype="multipart/form-data">
             <div class="options-section">
                 <h3 class="options-section-title">Tipo de Encuadernación</h3>
                 <p style="text-align:center;color:var(--marron-texto);margin-bottom:2rem;">Elige el estilo que más te guste</p>
-                <input type="hidden" id="opcFinal" name="opcFinal" value="">
+                <input type="hidden" id="opcFinal" name="TipoEncuadernacion" value="">
                 <div class="binding-options-grid">
                     <label class="binding-option">
                         <input type="radio" id="opcClasica" name="opcion" value="encuadernacionClasica">
@@ -66,7 +63,7 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'personalizada.js'];
                 <div class="form-row">
                     <div class="form-field">
                         <label for="tam">Tamaño de tu libreta</label>
-                        <select name="tamaño" id="tam" required>
+                        <select name="Tamano" id="tam" required>
                             <option value="Chica 11cm x 12cm">Chica (11cm x 12cm)</option>
                             <option value="Mediana 14cm x 23cm" selected>Mediana (14cm x 23cm)</option>
                             <option value="Grande 18cm x 23cm">Grande (18cm x 23cm)</option>
@@ -74,7 +71,7 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'personalizada.js'];
                     </div>
                     <div class="form-field">
                         <label for="tipoPap">Tipo de papel</label>
-                        <select name="tipoPapel" id="tipoPap" required>
+                        <select name="TipoPapel" id="tipoPap" required>
                             <option value="Ahuesado">Ahuesado</option>
                             <option value="Capuchino">Capuchino (Reciclado)</option>
                             <option value="Blanco" selected>Blanco</option>
@@ -85,7 +82,7 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'personalizada.js'];
                     <label for="color">Color de detalles</label>
                     <p style="color:var(--marron-texto);margin-bottom:1rem;font-size:.9rem;">Escoge el tono para resaltar el lomo y otros detalles clave</p>
                     <div class="color-picker-wrapper">
-                        <input type="color" name="color" id="color" class="color-picker-preview" value="#1E9332">
+                        <input type="color" name="Color" id="color" class="color-picker-preview" value="#1E9332">
                         <input type="text" class="color-picker-input" value="#1E9332" readonly>
                     </div>
                 </div>
@@ -95,9 +92,9 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'personalizada.js'];
                         <label for="portada" class="file-upload-label">
                             <span class="file-upload-icon">📁</span>
                             <span class="file-upload-text">Haz clic para subir tu diseño</span>
-                            <span class="file-upload-hint">Formatos: JPG, PNG (Máx. 5MB)</span>
+                            <span class="file-upload-hint">Formatos: JPG, PNG o WEBP (Máx. 5MB)</span>
                         </label>
-                        <input type="file" name="portada" id="portada" class="file-upload-input" accept="image/*">
+                        <input type="file" name="Portada" id="portada" class="file-upload-input" accept="image/jpeg,image/png,image/webp">
                     </div>
                     <div id="imagePreview" class="image-preview" style="display:none;">
                         <img id="previewImg" src="" alt="Vista previa">
@@ -106,7 +103,7 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'personalizada.js'];
                 </div>
                 <div class="form-field" style="margin-top:2rem;">
                     <label for="desc">Describe tu portada ideal</label>
-                    <textarea name="descripcion" id="desc" placeholder="Cuéntanos cómo imaginas tu portada perfecta..."></textarea>
+                    <textarea name="Descripcion" id="desc" maxlength="150" placeholder="Cuéntanos cómo imaginas tu portada perfecta..."></textarea>
                 </div>
                 <div class="form-note">
                     <p class="form-note-text">

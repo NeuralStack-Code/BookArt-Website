@@ -3,9 +3,6 @@
 
 # ── API (repo independiente con su propio git) ────────────────
 
-# ── Dependencias ─────────────────────────────────────────────
-/vendor/
-
 # ── Runtime (generado en servidor, nunca en repo) ─────────────
 /storage/
 /wwwroot/portadas/

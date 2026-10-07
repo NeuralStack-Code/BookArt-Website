@@ -26,33 +26,54 @@ if ($route === false) $route = '';
 $routes = [
     ''                   => __DIR__ . '/webService/views/home.php',
     'index.php'          => __DIR__ . '/webService/views/home.php',
-    'contacto'           => __DIR__ . '/webService/views/user/Contacto.php',
 
     // Usuario
-    'catalogo'           => __DIR__ . '/webService/views/user/Catalogo.php',
     'productos'          => __DIR__ . '/webService/views/user/Productos.php',
-    'carrito'            => __DIR__ . '/webService/views/user/Carrito.php',
-    'inicio-sesion'      => __DIR__ . '/webService/views/user/Inicio_sesion.php',
-    'nueva-contrasena'   => __DIR__ . '/webService/views/user/NuevaContrasena.php',
-    'mis-pedidos'        => __DIR__ . '/webService/views/user/MisPedidos.php',
-    'personalizada'      => __DIR__ . '/webService/views/user/Personalizada.php',
-    'extension-catalogo' => __DIR__ . '/webService/views/user/Extension_Catalogo.php',
-    'editar-pedido'      => __DIR__ . '/webService/views/user/EditarPedido.php',
 
     // Admin
     'administrador'      => __DIR__ . '/webService/views/admin/Administrador.php',
 ];
 
-// Admin bloqueado en su panel hasta cerrar sesión
+// Pantallas que ya son /<controller>/<método>. Las URLs anteriores redirigen (301) conservando el query string.
+$moved = [
+    'inicio-sesion'    => '/auth/entrar',
+    'nueva-contrasena' => '/auth/restablecer',
+    'mis-pedidos'      => '/pedidos',
+];
+if (isset($moved[$route])) {
+    $query = $_SERVER['QUERY_STRING'] ?? '';
+    header('Location: ' . BASE_URL . $moved[$route] . ($query !== '' ? '?' . $query : ''), true, 301);
+    exit;
+}
+
+// Estas dos cambiaron de URL y de nombre de parámetro:
+//   /extension-catalogo?id=  →  /catalogo/detalle?IdProducto=
+//   /editar-pedido?id=       →  /personalizada/editar?IdPedido=
+if ($route === 'extension-catalogo') {
+    header('Location: ' . BASE_URL . '/catalogo/detalle?IdProducto=' . (int) ($_GET['id'] ?? 0), true, 301);
+    exit;
+}
+if ($route === 'editar-pedido') {
+    header('Location: ' . BASE_URL . '/personalizada/editar?IdPedido=' . (int) ($_GET['id'] ?? 0), true, 301);
+    exit;
+}
+
+// Admin bloqueado en su panel hasta cerrar sesión: de las páginas sueltas solo ve la suya.
+// (Las pantallas que ya son de un controller lo mandan a su panel ellas mismas; sus métodos sí los usa el panel.)
 if (isset($_SESSION['permiso']) && (int)$_SESSION['permiso'] === 1) {
-    if ($route !== 'administrador') {
+    if (array_key_exists($route, $routes) && $route !== 'administrador') {
         header('Location: ' . BASE_URL . '/administrador');
         exit;
     }
 }
 
+// 1) Páginas sueltas de $routes.  2) /<controller>/<método> (controllers que heredan de Controller;
+//    lo despacha el router de apiService).  3) 404.
 if (array_key_exists($route, $routes)) {
     require $routes[$route];
+} elseif (($class = routeController(explode('/', $route)[0])) !== null
+          && method_exists($class, explode('/', $route, 2)[1] ?? 'index')) {
+    require __DIR__ . '/apiService/index.php';
 } else {
     http_response_code(404);
     require __DIR__ . '/webService/views/404.php';

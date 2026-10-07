@@ -1,35 +1,5 @@
 <?php
-require_once __DIR__ . '/../../../apiService/core/conexionBDD.php';
-
-if (!isset($_SESSION['usuario'])) {
-    header('Location: /inicio-sesion'); exit;
-}
-
-$usuarioId     = $_SESSION['id_cuenta'] ?? null;
-$correoUsuario = $_SESSION['correo']    ?? $_SESSION['usuario'] ?? null;
-
-$pedidos = [];
-if ($usuarioId) {
-    $sql = "SELECT p.idPedido, p.fecha, p.hora, p.estatus, p.mensaje,
-                   tp.descripcion as tipo_descripcion, tp.id_tipoPedido,
-                   CASE WHEN tp.id_tipoPedido = 1 THEN c.nombre    ELSE 'Libreta Personalizada' END as nombre,
-                   CASE WHEN tp.id_tipoPedido = 1 THEN c.precio    ELSE COALESCE(per.precio,0) END as precio,
-                   CASE WHEN tp.id_tipoPedido = 1 THEN c.img       ELSE per.portada END as img,
-                   CASE WHEN tp.id_tipoPedido = 1 THEN c.descripcion ELSE per.descripcion END as descripcion
-            FROM pedidos p
-            INNER JOIN tipoPedido tp ON p.idTipoPedido = tp.id_tipoPedido
-            LEFT JOIN catalogo c ON p.idCatalogo = c.id_producto AND tp.id_tipoPedido = 1
-            LEFT JOIN personalizada per ON p.idPersonalizada = per.id_personalizada AND tp.id_tipoPedido = 2
-            WHERE p.idCuenta = ? AND p.estatus != 'carrito'
-            ORDER BY p.fecha DESC, p.hora DESC";
-    $stmt = mysqli_prepare($conexion, $sql);
-    mysqli_stmt_bind_param($stmt, 'i', $usuarioId);
-    mysqli_stmt_execute($stmt);
-    $pedidos = mysqli_fetch_all(mysqli_stmt_get_result($stmt), MYSQLI_ASSOC);
-    mysqli_stmt_close($stmt);
-}
-mysqli_close($conexion);
-
+/** Pantalla "Mis pedidos". La pinta PedidosController::index(). Recibe $pedidos (lista de Pedido) y $base. */
 $title    = 'Mis Pedidos - BookArt';
 $extraCss = ['styleMisPedidos.css'];
 $extraJs  = ['funcionModal.js', 'misPedidos.js', 'userMenu.js'];
@@ -52,69 +22,53 @@ $extraJs  = ['funcionModal.js', 'misPedidos.js', 'userMenu.js'];
             <p>Aquí puedes ver el estado de todos tus pedidos</p>
         </div>
 
-        <?php if (count($pedidos) > 0): ?>
-            <?php foreach ($pedidos as $pedido):
-                $isCatalogo = ($pedido['id_tipoPedido'] == 1);
-                $estatus    = strtolower($pedido['estatus']);
-                $statusMap  = [
-                    'pendiente' => ['⏳','Pendiente de revisión'],
-                    'visto'     => ['👀','Visto por el administrador'],
-                    'aprobado'  => ['✅','Aprobado'],
-                    'declinado' => ['❌','Declinado'],
-                    'proceso'   => ['🔨','En proceso de elaboración'],
-                    'terminado' => ['🎉','Terminado - Listo para entrega'],
-                    'entregado'  => ['📦','Entregado'],
-                    'cancelado'  => ['🚫','Cancelado'],
-                ];
-                [$icon, $text] = $statusMap[$estatus] ?? ['❓','Estado desconocido'];
-                $puedeEditar = in_array($estatus, ['pendiente','visto']);
-            ?>
+        <?php if ($pedidos): ?>
+            <?php foreach ($pedidos as $pedido): ?>
             <div class="pedido-card">
                 <div class="pedido-header">
-                    <div class="pedido-id">Pedido #<?= str_pad($pedido['idPedido'], 5, '0', STR_PAD_LEFT) ?></div>
+                    <div class="pedido-id">Pedido <?= e($pedido->number()) ?></div>
                     <div class="pedido-fecha">
-                        📅 <?= date('d/m/Y', strtotime($pedido['fecha'])) ?>
-                        🕐 <?= date('H:i', strtotime($pedido['hora'])) ?>
+                        📅 <?= formatDate($pedido->Fecha) ?>
+                        🕐 <?= e(substr($pedido->Hora, 0, 5)) ?>
                     </div>
                 </div>
                 <div class="pedido-body">
                     <div class="pedido-image">
-                        <img src="<?= $pedido['img'] ? htmlspecialchars($pedido['img']) : '/webService/wwwroot/catalogo/imgNoEncontrada.png' ?>"
-                             alt="<?= htmlspecialchars($pedido['nombre']) ?>">
+                        <img src="<?= e($base . $pedido->image()) ?>" alt="<?= e($pedido->Nombre) ?>">
                     </div>
                     <div class="pedido-info">
-                        <span class="pedido-tipo"><?= $isCatalogo ? '📚 Catálogo' : '🎨 Personalizada' ?></span>
-                        <h3><?= htmlspecialchars($pedido['nombre']) ?></h3>
-                        <?php if (!empty($pedido['descripcion'])): ?>
-                            <p class="pedido-descripcion"><?= htmlspecialchars(substr($pedido['descripcion'], 0, 150)) ?>...</p>
+                        <span class="pedido-tipo"><?= $pedido->isCatalog() ? '📚 Catálogo' : '🎨 Personalizada' ?></span>
+                        <h3><?= e($pedido->Nombre) ?></h3>
+                        <?php if (!empty($pedido->Descripcion)): ?>
+                            <p class="pedido-descripcion"><?= e(truncate($pedido->Descripcion, 150)) ?></p>
                         <?php endif; ?>
                     </div>
                     <div class="pedido-precio">
-                        <?= $isCatalogo || $pedido['precio'] > 0 ? '$' . number_format($pedido['precio'], 2) : 'A cotizar' ?>
+                        <?= e($pedido->priceLabel()) ?>
                     </div>
                 </div>
                 <div class="pedido-status">
-                    <span class="status-badge status-<?= $estatus ?>"><?= $icon . ' ' . $text ?></span>
+                    <span class="status-badge status-<?= e($pedido->status()) ?>"><?= e($pedido->statusLabel()) ?></span>
 
-                    <?php if ($puedeEditar): ?>
+                    <?php if ($pedido->isOpen()): ?>
                     <div class="pedido-actions">
-                        <?php if ($pedido['id_tipoPedido'] == 2): ?>
-                            <button onclick="editarPedido('<?= $pedido['idPedido'] ?>',<?= $pedido['id_tipoPedido'] ?>)" class="btn-action btn-editar-pedido">
+                        <?php if (!$pedido->isCatalog()): ?>
+                            <button onclick="editarPedido(<?= (int) $pedido->IdPedido ?>)" class="btn-action btn-editar-pedido">
                                 <span class="material-symbols-outlined">edit</span> Editar
                             </button>
                         <?php endif; ?>
-                        <button onclick="cancelarPedido('<?= $pedido['idPedido'] ?>')" class="btn-action btn-cancelar-pedido">
+                        <button onclick="cancelarPedido(<?= (int) $pedido->IdPedido ?>)" class="btn-action btn-cancelar-pedido">
                             <span class="material-symbols-outlined">cancel</span> Cancelar Pedido
                         </button>
                     </div>
                     <?php endif; ?>
 
-                    <?php if (in_array($estatus, ['aprobado','proceso','terminado','visto','declinado','entregado']) && !empty($pedido['mensaje'])): ?>
+                    <?php if ($pedido->showsMessage()): ?>
                     <div class="mensaje-admin">
                         <div class="mensaje-admin-header">
                             <span class="material-symbols-outlined">mail</span> Mensaje del administrador:
                         </div>
-                        <p><?= nl2br(htmlspecialchars($pedido['mensaje'])) ?></p>
+                        <p><?= nl2br(e($pedido->Mensaje)) ?></p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -125,7 +79,7 @@ $extraJs  = ['funcionModal.js', 'misPedidos.js', 'userMenu.js'];
                 <div class="empty-pedidos-icon">📦</div>
                 <h2>No tienes pedidos aún</h2>
                 <p style="color:var(--marron-texto);margin:1rem 0 2rem;">¡Explora nuestros productos y realiza tu primer pedido!</p>
-                <a href="/productos" class="btn-primary" style="display:inline-block;text-decoration:none;padding:1rem 2rem;">Ver Productos</a>
+                <a href="<?= e($base) ?>/productos" class="btn-primary" style="display:inline-block;text-decoration:none;padding:1rem 2rem;">Ver Productos</a>
             </div>
         <?php endif; ?>
     </div>

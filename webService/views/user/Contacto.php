@@ -1,4 +1,5 @@
 <?php
+/** Pantalla de contacto. La pinta ContactoController::index(). Los campos se llaman como el parámetro que reciben. */
 $title   = 'Contacto - BookArt';
 $extraJs = ['funcionModal.js', 'userMenu.js'];
 ?>
@@ -51,10 +52,10 @@ $extraJs = ['funcionModal.js', 'userMenu.js'];
                 <h3 class="social-title">Síguenos en Redes</h3>
                 <div class="social-links-grid">
                     <a href="https://www.facebook.com/profile.php?id=100090511421324" class="social-link" target="_blank">
-                        <img src="/webService/wwwroot/img/facebook-icon.png" alt="Facebook"><span>Facebook</span>
+                        <img src="<?= e($base) ?>/webService/wwwroot/img/facebook-icon.png" alt="Facebook"><span>Facebook</span>
                     </a>
                     <a href="https://www.instagram.com/bookart_encuadernaciones/" class="social-link" target="_blank">
-                        <img src="/webService/wwwroot/img/Instagram-Icon.png" alt="Instagram"><span>Instagram</span>
+                        <img src="<?= e($base) ?>/webService/wwwroot/img/Instagram-Icon.png" alt="Instagram"><span>Instagram</span>
                     </a>
                 </div>
             </div>
@@ -67,19 +68,19 @@ $extraJs = ['funcionModal.js', 'userMenu.js'];
             <form class="contact-form" id="contactForm">
                 <div class="form-group-contact">
                     <label for="nombre">Nombre completo</label>
-                    <input type="text" id="nombre" name="nombre" required placeholder="Juan Pérez García">
+                    <input type="text" id="nombre" name="Nombre" maxlength="100" required placeholder="Juan Pérez García">
                 </div>
                 <div class="form-group-contact">
                     <label for="email">Correo Electrónico</label>
-                    <input type="email" id="email" name="email" required placeholder="tu@email.com">
+                    <input type="email" id="email" name="Correo" required placeholder="tu@email.com">
                 </div>
                 <div class="form-group-contact">
                     <label for="telefono">Teléfono</label>
-                    <input type="tel" id="telefono" name="tel" required placeholder="(55) 1234-5678">
+                    <input type="tel" id="telefono" name="Telefono" maxlength="30" required placeholder="(55) 1234-5678">
                 </div>
                 <div class="form-group-contact">
                     <label for="comentario">Tu Mensaje</label>
-                    <textarea id="comentario" name="mensaje" required placeholder="Cuéntanos en qué podemos ayudarte..."></textarea>
+                    <textarea id="comentario" name="Mensaje" maxlength="3000" required placeholder="Cuéntanos en qué podemos ayudarte..."></textarea>
                 </div>
                 <button type="submit" class="btn-submit-contact">
                     <span class="material-symbols-outlined">send</span>
@@ -113,13 +114,13 @@ if (form) {
         btn.disabled = true;
         btn.textContent = 'Enviando...';
         try {
-            const res  = await fetch('/api/contacto', { method: 'POST', body: new FormData(form) });
-            const data = await res.json();
-            if (data.success) {
+            const response = await fetch(api('/contacto/enviar'), { method: 'POST', body: new FormData(form) });
+            const result   = await response.json();
+            if (result.success) {
                 form.reset();
                 document.getElementById('successMessage').style.display = 'flex';
             } else {
-                mostrarDialog('❌ ' + data.message, 'error');
+                mostrarDialog('❌ ' + result.message, 'error');
             }
         } catch {
             mostrarDialog('❌ Error de conexión. Intenta de nuevo.', 'error');

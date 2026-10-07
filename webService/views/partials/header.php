@@ -39,7 +39,7 @@ if (isset($_SESSION['usuario'])) {
                             <div class="user-dropdown-email"><?= htmlspecialchars($_SESSION['usuario']) ?></div>
                         </div>
                         <div class="user-dropdown-menu">
-                            <a href="<?= $base ?>/mis-pedidos" class="user-dropdown-item">
+                            <a href="<?= $base ?>/pedidos" class="user-dropdown-item">
                                 <span class="material-symbols-outlined">receipt_long</span><span>Mis Pedidos</span>
                             </a>
                             <a href="<?= $base ?>/carrito" class="user-dropdown-item" style="position:relative;">
@@ -53,7 +53,7 @@ if (isset($_SESSION['usuario'])) {
                     </div>
                 </div>
             <?php else: ?>
-                <a href="<?= $base ?>/inicio-sesion" class="btn-session">Iniciar sesión</a>
+                <a href="<?= $base ?>/auth/entrar" class="btn-session">Iniciar sesión</a>
             <?php endif; ?>
         </nav>
 
@@ -66,9 +66,9 @@ if (isset($_SESSION['usuario'])) {
 <script>
 async function cerrarSesion() {
     try {
-        await fetch((window.BASE_URL || '') + '/api/auth?action=logout', { method: 'POST' });
+        await fetch((window.BASE_URL || '') + '/auth/salir', { method: 'POST' });
     } catch {}
-    window.location.href = (window.BASE_URL || '') + '/inicio-sesion';
+    window.location.href = (window.BASE_URL || '') + '/auth/entrar';
 }
 
 function toggleMenu() {

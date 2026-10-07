@@ -146,7 +146,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (maternoInput) {
         maternoInput.addEventListener("input", function() {
             const inputValue = maternoInput.value;
-            validado = nameRegex.test(inputValue);
+            validado = inputValue === '' || nameRegex.test(inputValue);   // opcional: vacío es válido
             toggleVisibility(validado, "etiquetaMaterno");
             enableDisableButton();
         });
@@ -515,13 +515,13 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.disabled     = true;
             if (errorEl) errorEl.style.display = 'none';
             try {
-                const res  = await fetch(BASE_URL + '/api/auth?action=login', { method: 'POST', body: new FormData(formLogin) });
-                const data = await res.json();
-                if (data.success) {
-                    window.location.href = data.redirect;
+                const response = await fetch(BASE_URL + '/auth/entrar', { method: 'POST', body: new FormData(formLogin) });
+                const result   = await response.json();
+                if (result.success) {
+                    window.location.href = BASE_URL + result.data.redirect;
                 } else {
                     if (errorEl) {
-                        errorEl.textContent = '⚠️ ' + data.message;
+                        errorEl.textContent = '⚠️ ' + result.message;
                         errorEl.style.display = 'block';
                     }
                 }
@@ -544,13 +544,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const btn = formCC.querySelector('[type="submit"]');
             btn.disabled = true;
             try {
-                const res  = await fetch(BASE_URL + '/api/auth?action=register', { method: 'POST', body: new FormData(formCC) });
-                const data = await res.json();
-                if (data.success) {
-                    window.mostrarDialog('✅ ' + data.message, 'success');
+                const response = await fetch(BASE_URL + '/auth/registrar', { method: 'POST', body: new FormData(formCC) });
+                const result   = await response.json();
+                if (result.success) {
+                    window.mostrarDialog('✅ ' + result.message, 'success');
                     setTimeout(() => window.location.reload(), 2000);
                 } else {
-                    window.mostrarDialog('❌ ' + data.message, 'error');
+                    window.mostrarDialog('❌ ' + result.message, 'error');
                 }
             } catch {
                 window.mostrarDialog('❌ Error de conexión.', 'error');
@@ -568,10 +568,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const btn = formRecuperar.querySelector('[type="submit"]');
             btn.disabled = true;
             try {
-                const res  = await fetch(BASE_URL + '/api/auth?action=forgot', { method: 'POST', body: new FormData(formRecuperar) });
-                const data = await res.json();
-                window.mostrarDialog((data.success ? '✅ ' : '❌ ') + data.message, data.success ? 'success' : 'error');
-                if (data.success) formRecuperar.reset();
+                const response = await fetch(BASE_URL + '/auth/recuperar', { method: 'POST', body: new FormData(formRecuperar) });
+                const result   = await response.json();
+                window.mostrarDialog((result.success ? '✅ ' : '❌ ') + result.message, result.success ? 'success' : 'error');
+                if (result.success) formRecuperar.reset();
             } catch {
                 window.mostrarDialog('❌ Error de conexión.', 'error');
             } finally {

@@ -17,7 +17,10 @@ $base = BASE_URL;
 <title><?= htmlspecialchars($title) ?></title>
 
 <!-- Base URL para JS -->
-<script>window.BASE_URL = '<?= $base ?>';</script>
+<script>
+window.BASE_URL = '<?= $base ?>';
+window.api = (path) => window.BASE_URL + path;   // URL de un método o archivo del sitio: api('/catalogo/listar')
+</script>
 
 <!-- Fuentes -->
 <link href="https://fonts.googleapis.com/css2?family=Chewy&family=Martian+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">

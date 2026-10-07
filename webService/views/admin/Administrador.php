@@ -163,23 +163,23 @@ $extraJs  = ['funcionModal.js', 'logicaAdmin.js'];
             <button class="btn-cerrar" onclick="cerrarModal()"><span class="material-symbols-outlined">close</span></button>
         </div>
         <form id="formProducto" enctype="multipart/form-data">
-            <input type="hidden" id="productoId" name="id_producto">
+            <input type="hidden" id="productoId" name="IdProducto">
             <div class="form-group">
                 <label for="nombreProducto"><span class="material-symbols-outlined">label</span> Nombre del producto</label>
-                <input type="text" id="nombreProducto" name="nombre" required>
+                <input type="text" id="nombreProducto" name="Nombre" maxlength="35" required>
             </div>
             <div class="form-group">
                 <label for="descripcionProducto"><span class="material-symbols-outlined">description</span> Descripción</label>
-                <textarea id="descripcionProducto" name="descripcion" rows="4" required></textarea>
+                <textarea id="descripcionProducto" name="Descripcion" rows="4" maxlength="500" required></textarea>
             </div>
             <div class="form-group">
                 <label for="precioProducto"><span class="material-symbols-outlined">attach_money</span> Precio</label>
-                <input type="number" id="precioProducto" name="precio" step="0.01" required>
+                <input type="number" id="precioProducto" name="Precio" step="0.01" min="0" required>
             </div>
             <div class="form-group">
                 <label for="imagenProducto"><span class="material-symbols-outlined">image</span> Imagen del producto</label>
                 <div class="file-upload">
-                    <input type="file" id="imagenProducto" name="imagen" accept="image/*" onchange="previsualizarImagen(event)">
+                    <input type="file" id="imagenProducto" name="Imagen" accept="image/jpeg,image/png,image/gif" onchange="previsualizarImagen(event)">
                     <div id="preview" class="preview-container"></div>
                 </div>
             </div>

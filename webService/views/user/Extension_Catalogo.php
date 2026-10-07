@@ -1,30 +1,6 @@
 <?php
-require_once __DIR__ . '/../../../apiService/core/config.php';
-require_once __DIR__ . '/../../../apiService/core/conexionBDD.php';
-
-$id_producto = $_GET['id']    ?? '';
-$token       = $_GET['token'] ?? '';
-
-if (empty($id_producto) || empty($token)) {
-    http_response_code(400); echo 'Valores inválidos.'; exit;
-}
-
-if ($token !== hash_hmac('sha1', $id_producto, KEY_TOKEN)) {
-    http_response_code(403); echo 'Token inválido.'; exit;
-}
-
-$stmt = mysqli_prepare($conexion, "SELECT nombre, img, descripcion, precio FROM catalogo WHERE id_producto = ?");
-mysqli_stmt_bind_param($stmt, 's', $id_producto);
-mysqli_stmt_execute($stmt);
-$producto = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-mysqli_stmt_close($stmt);
-mysqli_close($conexion);
-
-if (!$producto) {
-    http_response_code(404); echo 'Producto no encontrado.'; exit;
-}
-
-$title   = htmlspecialchars($producto['nombre']) . ' - BookArt';
+/** Pantalla de un producto. La pinta CatalogoController::detalle(). Recibe $producto (Producto) y $base. */
+$title   = $producto->Nombre . ' - BookArt';
 $extraJs = ['userMenu.js', 'funcionModal.js', 'extensionCatalogo.js'];
 ?>
 <!DOCTYPE html>
@@ -37,23 +13,23 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'extensionCatalogo.js'];
     <div class="product-detail-container">
         <div class="product-detail-gallery">
             <div class="product-main-image">
-                <img src="<?= htmlspecialchars($producto['img']) ?>" alt="<?= htmlspecialchars($producto['nombre']) ?>">
+                <img src="<?= e($base . $producto->Imagen) ?>" alt="<?= e($producto->Nombre) ?>">
             </div>
         </div>
         <div class="product-detail-info">
             <div class="product-detail-breadcrumb">
-                <a href="/">Inicio</a>
+                <a href="<?= e($base) ?>/">Inicio</a>
                 <span>/</span>
-                <a href="/catalogo">Catálogo</a>
+                <a href="<?= e($base) ?>/catalogo">Catálogo</a>
                 <span>/</span>
-                <span><?= htmlspecialchars($producto['nombre']) ?></span>
+                <span><?= e($producto->Nombre) ?></span>
             </div>
-            <h1 class="product-detail-title"><?= htmlspecialchars($producto['nombre']) ?></h1>
-            <div class="product-detail-price">$<?= htmlspecialchars($producto['precio']) ?> MXN</div>
-            <p class="product-detail-description"><?= htmlspecialchars($producto['descripcion']) ?></p>
+            <h1 class="product-detail-title"><?= e($producto->Nombre) ?></h1>
+            <div class="product-detail-price"><?= money($producto->Precio) ?> MXN</div>
+            <p class="product-detail-description"><?= e($producto->Descripcion) ?></p>
             <div class="product-detail-actions">
                 <?php if (isset($_SESSION['usuario'])): ?>
-                    <button class="btn-add-cart" onclick="agregarAlCarritoCatalogo(<?= (int)$id_producto ?>, event)">
+                    <button class="btn-add-cart" onclick="agregarAlCarritoCatalogo(<?= (int) $producto->IdProducto ?>, event)">
                         <span class="material-symbols-outlined">shopping_cart</span>
                         Agregar al carrito
                     </button>
@@ -62,12 +38,12 @@ $extraJs = ['userMenu.js', 'funcionModal.js', 'extensionCatalogo.js'];
                         Ver carrito
                     </a>
                 <?php else: ?>
-                    <a href="/inicio-sesion" class="btn-add-cart" style="display:inline-flex;align-items:center;justify-content:center;gap:.5rem;text-decoration:none;">
+                    <a href="<?= e($base) ?>/auth/entrar" class="btn-add-cart" style="display:inline-flex;align-items:center;justify-content:center;gap:.5rem;text-decoration:none;">
                         <span class="material-symbols-outlined">login</span>
                         Inicia sesión para comprar
                     </a>
                 <?php endif; ?>
-                <a href="/catalogo" class="btn-back-catalog">
+                <a href="<?= e($base) ?>/catalogo" class="btn-back-catalog">
                     <span class="material-symbols-outlined">arrow_back</span>
                     Volver al catálogo
                 </a>

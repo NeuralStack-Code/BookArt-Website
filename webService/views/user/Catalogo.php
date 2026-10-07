@@ -1,19 +1,5 @@
 <?php
-require_once __DIR__ . '/../../../apiService/core/config.php';
-require_once __DIR__ . '/../../../apiService/core/conexionBDD.php';
-
-if (!isset($_SESSION['usuario'])) {
-    header('Location: /inicio-sesion'); exit;
-}
-
-$catalogo = [];
-$sql = "SELECT id_producto, nombre, precio, img FROM catalogo";
-$result = mysqli_query($conexion, $sql);
-if ($result) {
-    $catalogo = mysqli_fetch_all($result, MYSQLI_ASSOC);
-}
-mysqli_close($conexion);
-
+/** Pantalla del catálogo. La pinta CatalogoController::index(). Recibe $productos (lista de Producto) y $base. */
 $title   = 'Catálogo - BookArt Encuadernaciones';
 $extraJs = ['userMenu.js'];
 ?>
@@ -30,18 +16,18 @@ $extraJs = ['userMenu.js'];
 
 <section class="catalog-section">
     <div class="catalog-container">
-        <?php if (!empty($catalogo)): ?>
+        <?php if ($productos): ?>
             <div class="catalog-grid">
-                <?php foreach ($catalogo as $row): ?>
-                    <a href="/extension-catalogo?id=<?= $row['id_producto'] ?>&token=<?= hash_hmac('sha1', $row['id_producto'], KEY_TOKEN) ?>" class="catalog-item">
+                <?php foreach ($productos as $producto): ?>
+                    <a href="<?= e($base) ?>/catalogo/detalle?IdProducto=<?= $producto->IdProducto ?>" class="catalog-item">
                         <div class="catalog-item-image">
-                            <img src="<?= htmlspecialchars($row['img']) ?>" alt="<?= htmlspecialchars($row['nombre']) ?>">
+                            <img src="<?= e($base . $producto->Imagen) ?>" alt="<?= e($producto->Nombre) ?>">
                         </div>
                         <div class="catalog-item-info">
-                            <h3 class="catalog-item-title"><?= htmlspecialchars($row['nombre']) ?></h3>
+                            <h3 class="catalog-item-title"><?= e($producto->Nombre) ?></h3>
                             <p class="catalog-item-description">Libreta artesanal hecha a mano con materiales de la más alta calidad</p>
                             <div class="catalog-item-footer">
-                                <span class="catalog-item-price">$<?= htmlspecialchars($row['precio']) ?></span>
+                                <span class="catalog-item-price"><?= money($producto->Precio) ?></span>
                                 <span class="catalog-item-action">
                                     Ver más
                                     <span class="material-symbols-outlined">arrow_forward</span>

@@ -2,9 +2,9 @@
 /**
  * Autocarga del proyecto.
  * - Usa Composer si vendor/ existe (classmap optimizado).
- * - Fallback en runtime: resuelve las clases propias (controllers/business) SIN
+ * - Carga el core del framework (lo entrega la api central: php apiService/core/update.php).
+ * - Fallback en runtime: resuelve las clases propias (controllers/business/models/libs) SIN
  *   Composer. Así solo programas: no hay que correr comandos.
- * - Carga auth.php (funciones requireAuth/requireUser) para todos los controllers.
  *
  * Idempotente: se incluye desde el index.php raíz y desde apiService/index.php
  * (el .htaccess manda /api directo a apiService).
@@ -16,7 +16,12 @@ $raiz   = dirname(__DIR__, 2);
 $vendor = $raiz . '/vendor/autoload.php';
 if (is_file($vendor)) require_once $vendor;   // opcional: solo si Composer generó vendor/
 
-require_once __DIR__ . '/../middleware/auth.php';  // funciones de sesión (no autocargables)
+require_once __DIR__ . '/procedure.php';      // sp(): el único punto que toca la base
+require_once __DIR__ . '/Command.php';        // procedure con parámetros por nombre + estado uniforme
+require_once __DIR__ . '/Entity.php';         // base de los business (solo datos)
+require_once __DIR__ . '/Model.php';          // base de los models (cargan las tablas que trae el business)
+require_once __DIR__ . '/ServerApi.php';      // por donde los controllers le hablan al business (+ Result)
+require_once __DIR__ . '/Controller.php';     // base de los controllers + routeController() + e()
 
 spl_autoload_register(static function (string $clase) use ($raiz): void {
     if (strpos($clase, '\\') !== false) return;   // namespaced → Composer/lib
@@ -24,7 +29,7 @@ spl_autoload_register(static function (string $clase) use ($raiz): void {
     static $mapa = null;
     if ($mapa === null) {
         $mapa = [];
-        foreach (['webService/controllers', 'webService/business'] as $rel) {
+        foreach (['webService/controllers', 'webService/business', 'webService/models', 'webService/libs'] as $rel) {
             $dir = $raiz . '/' . $rel;
             if (!is_dir($dir)) continue;
             $it = new RecursiveIteratorIterator(
@@ -32,7 +37,7 @@ spl_autoload_register(static function (string $clase) use ($raiz): void {
             );
             foreach ($it as $f) {
                 if ($f->isFile() && substr($f->getFilename(), -4) === '.php') {
-                    $mapa[substr($f->getFilename(), 0, -4)] = $f->getPathname();
+                    $mapa[substr($f->getFilename(), 0, -4)] ??= $f->getPathname();   // si un nombre se repite, gana la primera carpeta
                 }
             }
         }

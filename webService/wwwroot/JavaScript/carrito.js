@@ -36,8 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
 let itemToRemove = null;
 
 // --- FUNCIÓN PARA ABRIR MODAL DE ELIMINACIÓN ---
-function removeItem(id, tipo) {
-    itemToRemove = { id, tipo };
+function removeItem(id) {
+    itemToRemove = { id };
     const dialog = document.getElementById('deleteDialog');
     if (dialog) {
         dialog.showModal();
@@ -62,8 +62,12 @@ function confirmarEliminacion() {
     const dialog = document.getElementById('deleteDialog');
     if (dialog) dialog.close();
 
-    fetch(api(`/api/carrito?id=${id}`), {
-        method: 'DELETE'
+    const formData = new FormData();
+    formData.append('IdPedido', id);
+
+    fetch(api('/carrito/quitar'), {
+        method: 'POST',
+        body: formData
     })
     .then(res => res.json())
     .then(data => {
@@ -87,16 +91,13 @@ function confirmarPedido() {
     const dialog = document.getElementById('confirmDialog');
     if (dialog) dialog.close();
 
-    fetch(api('/api/carrito?action=checkout'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    })
+    fetch(api('/carrito/confirmar'), { method: 'POST' })
     .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            window.location.href = api('/mis-pedidos');
+    .then(result => {
+        if (result.success) {
+            window.location.href = api(result.data.redirect || '/pedidos');
         } else {
-            window.notifyResponse(data);
+            window.notifyResponse(result);
         }
     })
     .catch(() => window.notify('error', 'Error de conexión. Por favor intenta nuevamente.'));

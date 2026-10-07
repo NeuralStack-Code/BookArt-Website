@@ -1,8 +1,5 @@
 <?php
-if (isset($_SESSION['usuario'])) {
-    header('Location: /'); exit;
-}
-
+/** Pantalla de sesión. La pinta AuthController::entrar(). Los campos se llaman como el parámetro que reciben. */
 $title    = 'Inicio Sesión - BookArt';
 $extraCss = ['styleSesion.css'];
 $extraJs  = ['funcionModal.js'];
@@ -29,12 +26,12 @@ $extraJs  = ['funcionModal.js'];
                 <form id="formLogin">
                     <div style="position:relative;">
                         <p class="ingresaUsuario">Ingresa tu usuario o correo electrónico</p>
-                        <input type="text" name="sesionUsuario" required>
+                        <input type="text" name="Usuario" autocomplete="username" required>
                     </div>
                     <div style="position:relative;">
                         <p class="ingresaContra">Ingresa tu contraseña</p>
                         <span id="imgVerContrasena" class="material-symbols-outlined">visibility</span>
-                        <input id="pass" type="password" name="sesionContra" required>
+                        <input id="pass" type="password" name="Contrasena" autocomplete="current-password" required>
                     </div>
                     <p id="loginError" style="display:none;color:#c0392b;font-family:var(--font-body);font-size:.85rem;margin:.5rem 0;padding:.6rem 1rem;background:#fde8e8;border:2px solid #c0392b;border-radius:4px;"></p>
                     <p class="olvidaContra" onclick="reestablecerC()">He olvidado mi contraseña</p>
@@ -48,27 +45,27 @@ $extraJs  = ['funcionModal.js'];
                 <h1>Crear una cuenta</h1>
                 <div class="cNombre">
                     <p>Nombre</p>
-                    <input type="text" id="name" name="nombre" data-error-id="etiquetaNombre" required>
+                    <input type="text" id="name" name="Nombre" data-error-id="etiquetaNombre" required>
                     <p class="etiquetaNombre">Debe empezar con mayúscula y no se aceptan números</p>
                 </div>
                 <div class="cApellidoP">
                     <p>Apellido Paterno</p>
-                    <input id="firstname" type="text" name="paterno" data-error-id="etiquetaPaterno" required>
+                    <input id="firstname" type="text" name="Paterno" data-error-id="etiquetaPaterno" required>
                     <p class="etiquetaPaterno">Debe empezar con mayúscula y no se aceptan números</p>
                 </div>
                 <div class="cApellidoM">
                     <p>Apellido Materno</p>
-                    <input id="lastname" type="text" name="materno" data-error-id="etiquetaMaterno" required>
+                    <input id="lastname" type="text" name="Materno" data-error-id="etiquetaMaterno">
                     <p class="etiquetaMaterno">Debe empezar con mayúscula y no se aceptan números</p>
                 </div>
                 <div class="cUsuario">
                     <p>Nombre de usuario</p>
-                    <input id="usuario" type="text" name="usuario" data-error-id="etiquetaUsuario" required>
+                    <input id="usuario" type="text" name="Usuario" data-error-id="etiquetaUsuario" required>
                     <p class="etiquetaUsuario">Verifica tu usuario</p>
                 </div>
                 <div class="cTelefono">
                     <p>Teléfono</p>
-                    <input id="tel" type="tel" name="tel" data-error-id="etiquetaTel" required>
+                    <input id="tel" type="tel" name="Telefono" data-error-id="etiquetaTel" required>
                     <p class="etiquetaTel">Verifica tu teléfono</p>
                 </div>
                 <p class="tituloFechaN">Fecha de nacimiento</p>
@@ -91,24 +88,24 @@ $extraJs  = ['funcionModal.js'];
                 </div>
                 <div class="cAño">
                     <p>Año</p>
-                    <input id="año" type="text" name="anio" required>
+                    <input id="año" type="text" name="Anio" required>
                     <p class="etiquetaAño">Verifica tu año de nacimiento</p>
                 </div>
                 <div class="cCorreo">
                     <p>Correo electrónico</p>
-                    <input id="emailV" type="email" name="correo" placeholder="example@mail.com" data-error-id="etiquetaCorreo" required>
+                    <input id="emailV" type="email" name="Correo" placeholder="example@mail.com" data-error-id="etiquetaCorreo" required>
                     <p class="etiquetaCorreo">Verifica tu correo electrónico</p>
                 </div>
                 <div class="cContraseña">
                     <p>Contraseña</p>
-                    <input id="pass1" type="password" name="contrasena" data-error-id="etiquetaContra" required>
+                    <input id="pass1" type="password" name="Contrasena" data-error-id="etiquetaContra" required>
                     <span id="imgVerContrasena1" class="material-symbols-outlined">visibility</span>
                     <p class="etiquetaContra">Debe contener 8 caracteres: números, símbolos y mayúsculas</p>
                     <p class="etiquetaCoincidenciaC">Las contraseñas no coinciden</p>
                 </div>
                 <div class="cCContraseña">
                     <p>Confirma tu contraseña</p>
-                    <input id="pass2" type="password" name="ConfirmaContra" data-error-id="etiquetaContra2" required>
+                    <input id="pass2" type="password" name="ConfirmaContrasena" data-error-id="etiquetaContra2" required>
                     <span id="imgVerContrasena2" class="material-symbols-outlined">visibility</span>
                     <p class="etiquetaContra2">Debe contener 8 caracteres: números, símbolos y mayúsculas</p>
                     <p class="etiquetaCoincidenciaC">Las contraseñas no coinciden</p>
@@ -128,7 +125,7 @@ $extraJs  = ['funcionModal.js'];
                 <h1>Recuperación de contraseña</h1>
                 <div class="contentR">
                     <p>Ingresa el correo de tu cuenta y te enviaremos un enlace para elegir una contraseña nueva.</p>
-                    <input type="email" id="correoRecuperacion" name="correoRecupera" autocomplete="email" required>
+                    <input type="email" id="correoRecuperacion" name="Correo" autocomplete="email" required>
                     <p class="etiquetaError">Revisa tu correo electrónico</p>
                 </div>
                 <div class="btnReestablecer">

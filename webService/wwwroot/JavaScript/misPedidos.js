@@ -48,9 +48,9 @@ function confirmarCancelacion() {
     if (!pedidoIdParaCancelar) return;
     
     const formData = new FormData();
-    formData.append('id', pedidoIdParaCancelar);
+    formData.append('IdPedido', pedidoIdParaCancelar);
 
-    fetch(api('/api/pedidos?action=cancel'), {
+    fetch(api('/pedidos/cancelar'), {
         method: 'POST',
         body: formData
     })
@@ -72,13 +72,9 @@ function confirmarCancelacion() {
     });
 }
 
-function editarPedido(idPedido, tipo) {
-    // Redirigir a la página de edición según el tipo
-    if (tipo == 1) { // Catálogo
-        mostrarDialog('ℹ️ Los pedidos del catálogo no se pueden editar. Puedes cancelarlo y crear uno nuevo.', 'info');
-    } else { // Personalizada
-        window.location.href = `/editar-pedido?id=${idPedido}`;
-    }
+// Solo las libretas personalizadas tienen diseño que cambiar (el botón solo sale en ellas).
+function editarPedido(idPedido) {
+    window.location.href = api(`/personalizada/editar?IdPedido=${idPedido}`);
 }
 
 function mostrarDialog(mensaje, tipo) {

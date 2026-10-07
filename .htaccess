@@ -1,5 +1,9 @@
 RewriteEngine On
 
+# Nunca servir las fuentes SQL ni archivos de proyecto (aunque lleguen a estar en el servidor)
+RewriteRule ^(webService/sql|vendor|storage)(/|$) - [F,L,NC]
+RewriteRule (^|/)(composer\.(json|lock)|[^/]+\.(sql|md))$ - [F,L,NC]
+
 # /api/* → apiService/index.php (el folder se llama apiService, la URL sigue siendo /api/)
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^api(/.*)?$ apiService/index.php [QSA,L]

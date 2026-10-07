@@ -46,8 +46,8 @@ document.querySelectorAll('.binding-option input[type="radio"]').forEach(radio =
     });
 });
 
-// Enviar formulario de personalizada vía fetch (la API devuelve JSON)
-const form = document.querySelector('form[action="/api/carrito"]');
+// Guardar el diseño: /personalizada/guardar lo deja en el carrito
+const form = document.getElementById('formPersonalizada');
 if (form) {
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -66,12 +66,12 @@ if (form) {
         if (btn) btn.disabled = true;
 
         try {
-            const res  = await fetch(api('/api/carrito'), { method: 'POST', body: new FormData(form) });
-            const data = await res.json();
-            if (data.success) {
-                window.location.href = data.redirect || '/carrito';
+            const response = await fetch(api('/personalizada/guardar'), { method: 'POST', body: new FormData(form) });
+            const result   = await response.json();
+            if (result.success) {
+                window.location.href = api(result.data.redirect || '/carrito');
             } else {
-                mostrarDialog('❌ ' + data.message, 'error');
+                mostrarDialog('❌ ' + result.message, 'error');
             }
         } catch {
             mostrarDialog('❌ Error de conexión. Intenta de nuevo.', 'error');

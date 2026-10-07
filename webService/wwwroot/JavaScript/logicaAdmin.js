@@ -31,16 +31,14 @@ function setupFormularios() {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const formData = new FormData(this);
-            const accion = modoEdicion ? 'editar' : 'agregar';
-            formData.append('action', accion);
-            
-            if(!modoEdicion && !formData.get('imagen').size) {
+            const formData = new FormData(this);   // con IdProducto es un cambio; sin él, un alta
+
+            if(!modoEdicion && !formData.get('Imagen').size) {
                 mostrarAlerta('Debes seleccionar una imagen', 'warning');
                 return;
             }
-            
-            fetch(api('/api/catalogo'), {
+
+            fetch(api('/catalogo/guardar'), {
                 method: 'POST',
                 body: formData
             })
@@ -67,14 +65,13 @@ function setupFormularios() {
         formEstatus.addEventListener('submit', function(e) {
             e.preventDefault();
             const params = new URLSearchParams({
-                pedidoId: document.getElementById('pedidoIdEstatus').value,
-                estatus:  document.getElementById('nuevoEstatus').value,
-                mensaje:  document.getElementById('mensajeAdmin').value
+                IdPedido: document.getElementById('pedidoIdEstatus').value,
+                Estatus:  document.getElementById('nuevoEstatus').value,
+                Mensaje:  document.getElementById('mensajeAdmin').value
             });
-            fetch(api('/api/pedidos?action=admin-estatus'), {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: params.toString()
+            fetch(api('/pedidos/estatus'), {
+                method: 'POST',
+                body: params
             })
             .then(response => response.json())
             .then(data => {
@@ -107,13 +104,12 @@ if (formPrecio) {
     formPrecio.addEventListener('submit', function(e) {
         e.preventDefault();
         const params = new URLSearchParams({
-            pedidoId: document.getElementById('pedidoIdPrecio').value,
-            precio:   document.getElementById('precioPedido').value
+            IdPedido: document.getElementById('pedidoIdPrecio').value,
+            Precio:   document.getElementById('precioPedido').value
         });
-        fetch(api('/api/pedidos?action=admin-precio'), {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString()
+        fetch(api('/pedidos/precio'), {
+            method: 'POST',
+            body: params
         })
         .then(response => response.json())
         .then(data => {
@@ -158,33 +154,34 @@ function principal() {
 
 function cargarEstadisticas() {
     // 1. Cargar total de productos
-    fetch(api('/api/catalogo?action=listar'))
+    fetch(api('/catalogo/listar'))
         .then(response => response.json())
-        .then(data => {
-            if(data.success) {
+        .then(result => {
+            if(result.success) {
                 const totalElement = document.getElementById('totalProductos');
                 if (totalElement) {
-                    totalElement.textContent = data.productos.length;
+                    totalElement.textContent = result.data.productos.length;
                 }
             }
         })
         .catch(error => console.error('Error cargando productos:', error));
     
     // 2. Cargar estadísticas de pedidos
-    fetch(api('/api/pedidos?action=estadisticas'))
+    fetch(api('/pedidos/estadisticas'))
         .then(response => response.json())
-        .then(data => {
-            if(data.success) {
+        .then(result => {
+            if(result.success) {
+                const numeros = result.data.estadisticas;
                 const statCards = document.querySelectorAll('.stat-card');
                 statCards.forEach(card => {
                     const text = card.textContent;
                     if (text.includes('Pedidos Activos')) {
-                        card.querySelector('.stat-info h3').textContent = data.pedidos_activos || 0;
+                        card.querySelector('.stat-info h3').textContent = numeros.PedidosActivos || 0;
                     } else if (text.includes('Clientes')) {
-                        card.querySelector('.stat-info h3').textContent = data.total_clientes || 0;
+                        card.querySelector('.stat-info h3').textContent = numeros.TotalClientes || 0;
                     } else if (text.includes('Ventas del Mes')) {
-                        card.querySelector('.stat-info h3').textContent = 
-                            '$' + (data.ventas_mes ? parseFloat(data.ventas_mes).toFixed(2) : '0.00');
+                        card.querySelector('.stat-info h3').textContent =
+                            '$' + (numeros.VentasMes ? parseFloat(numeros.VentasMes).toFixed(2) : '0.00');
                     }
                 });
             }
@@ -237,14 +234,14 @@ function cargarCatalogo() {
     const tbody = document.getElementById('tablaBody');
     tbody.innerHTML = '<tr><td colspan="6" class="loading"><div class="spinner"></div>Cargando productos...</td></tr>';
     
-    fetch(api('/api/catalogo?action=listar'))
+    fetch(api('/catalogo/listar'))
         .then(response => response.json())
-        .then(data => {
-            if(data.success) {
-                mostrarProductos(data.productos);
-                actualizarContadorProductos(data.productos.length);
+        .then(result => {
+            if(result.success) {
+                mostrarProductos(result.data.productos);
+                actualizarContadorProductos(result.data.productos.length);
             } else {
-                tbody.innerHTML = '<tr><td colspan="6" class="error">Error al cargar productos: ' + data.message + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="error">Error al cargar productos: ' + result.message + '</td></tr>';
             }
         })
         .catch(error => {
@@ -262,20 +259,20 @@ function mostrarProductos(productos) {
     }
     
     tbody.innerHTML = productos.map(producto => `
-        <tr data-id="${producto.id_producto}">
-            <td>${producto.id_producto}</td>
+        <tr data-id="${producto.IdProducto}">
+            <td>${producto.IdProducto}</td>
             <td>
-                <img src="${producto.img}" alt="${producto.nombre}" class="producto-img" 
-                     onerror="this.src='../Catalogo/imgNoEncontrada.png'">
+                <img src="${api(producto.Imagen)}" alt="${producto.Nombre}" class="producto-img"
+                     onerror="this.onerror=null; this.src=api('/webService/wwwroot/catalogo/imgNoEncontrada.png')">
             </td>
-            <td class="nombre-col">${producto.nombre}</td>
-            <td class="desc-col">${producto.descripcion}</td>
-            <td class="precio-col">$${parseFloat(producto.precio).toFixed(2)}</td>
+            <td class="nombre-col">${producto.Nombre}</td>
+            <td class="desc-col">${producto.Descripcion}</td>
+            <td class="precio-col">$${parseFloat(producto.Precio).toFixed(2)}</td>
             <td class="acciones-col">
-                <button class="btn-icon btn-editar" onclick="editarProducto(${producto.id_producto})" title="Editar">
+                <button class="btn-icon btn-editar" onclick="editarProducto(${producto.IdProducto})" title="Editar">
                     <span class="material-symbols-outlined">edit</span>
                 </button>
-                <button class="btn-icon btn-eliminar" onclick="eliminarProducto(${producto.id_producto}, '${producto.nombre.replace(/'/g, "\\'")}' )" title="Eliminar">
+                <button class="btn-icon btn-eliminar" onclick="eliminarProducto(${producto.IdProducto}, '${producto.Nombre.replace(/'/g, "\\'")}' )" title="Eliminar">
                     <span class="material-symbols-outlined">delete</span>
                 </button>
             </td>
@@ -314,18 +311,19 @@ function editarProducto(id) {
     modoEdicion = true;
     document.getElementById('modalTitulo').textContent = 'Editar Producto';
     
-    fetch(api(`/api/catalogo?action=obtener&id=${id}`))
+    fetch(api(`/catalogo/obtener?IdProducto=${id}`))
         .then(response => response.json())
-        .then(data => {
-            if(data.success) {
-                const p = data.producto;
-                document.getElementById('productoId').value = p.id_producto;
-                document.getElementById('nombreProducto').value = p.nombre;
-                document.getElementById('descripcionProducto').value = p.descripcion;
-                document.getElementById('precioProducto').value = p.precio;
-                
+        .then(result => {
+            if(result.success) {
+                const p = result.data.producto;
+                document.getElementById('formProducto').reset();      // que no se quede la imagen elegida antes
+                document.getElementById('productoId').value = p.IdProducto;
+                document.getElementById('nombreProducto').value = p.Nombre;
+                document.getElementById('descripcionProducto').value = p.Descripcion;
+                document.getElementById('precioProducto').value = p.Precio;
+
                 document.getElementById('preview').innerHTML = `
-                    <img src="${p.img}" alt="Imagen actual" onerror="this.src='../Catalogo/imgNoEncontrada.png'">
+                    <img src="${api(p.Imagen)}" alt="Imagen actual" onerror="this.onerror=null; this.src=api('/webService/wwwroot/catalogo/imgNoEncontrada.png')">
                     <p class="preview-text">Imagen actual</p>
                 `;
                 
@@ -357,10 +355,9 @@ function confirmarAccion() {
     if(!productoEliminarId) return;
     
     const formData = new FormData();
-    formData.append('action', 'eliminar');
-    formData.append('id', productoEliminarId);
-    
-    fetch(api('/api/catalogo'), {
+    formData.append('IdProducto', productoEliminarId);
+
+    fetch(api('/catalogo/eliminar'), {
         method: 'POST',
         body: formData
     })
@@ -427,13 +424,13 @@ function cargarPedidos() {
     
     tbody.innerHTML = '<tr><td colspan="7" class="loading"><div class="spinner"></div>Cargando pedidos...</td></tr>';
     
-    fetch(api('/api/pedidos?action=admin-listar'))
+    fetch(api('/pedidos/listar'))
         .then(response => response.json())
         .then(data => {
             console.log('📦 Respuesta del servidor:', data);
-            
+
             if(data.success) {
-                pedidosData = data.pedidos;
+                pedidosData = data.data.pedidos;
                 console.log('✅ Pedidos cargados:', pedidosData.length);
                 mostrarPedidos(pedidosData);
                 actualizarContadorPedidos(pedidosData);
@@ -460,7 +457,7 @@ function mostrarPedidos(pedidos) {
     console.log('🔍 Filtro actual:', filtro);
     
     if (filtro !== 'todos') {
-        pedidos = pedidos.filter(p => p.estatus.toLowerCase() === filtro);
+        pedidos = pedidos.filter(p => p.Estatus.toLowerCase() === filtro);
         console.log('📊 Pedidos después del filtro:', pedidos.length);
     }
     
@@ -470,13 +467,13 @@ function mostrarPedidos(pedidos) {
     }
     
     tbody.innerHTML = pedidos.map(pedido => {
-        const estatusClass = 'estatus-' + pedido.estatus.toLowerCase();
-        const isCatalogo = (pedido.id_tipoPedido == 1);
+        const estatusClass = 'estatus-' + pedido.Estatus.toLowerCase();
+        const isCatalogo = (pedido.IdTipoPedido == 1);
         const tipoClass  = isCatalogo ? 'pedido-tipo-catalogo' : 'pedido-tipo-personalizada';
         const tipoTexto  = isCatalogo ? '📚 Catálogo' : '🎨 Personalizada';
         
         let estatusIcon = '';
-        switch(pedido.estatus.toLowerCase()) {
+        switch(pedido.Estatus.toLowerCase()) {
             case 'pendiente': estatusIcon = '⏳'; break;
             case 'visto': estatusIcon = '👀'; break;
             case 'aprobado': estatusIcon = '✅'; break;
@@ -487,7 +484,7 @@ function mostrarPedidos(pedidos) {
         }
         
         // Determinar el precio a mostrar
-        const precioVal = parseFloat(pedido.producto_precio || 0);
+        const precioVal = parseFloat(pedido.Precio || 0);
         let precioHTML = '';
         if (isCatalogo) {
             precioHTML = `<span style="color: var(--primary); font-weight: bold; font-size: 1.2rem;">$${precioVal.toFixed(2)}</span>`;
@@ -495,14 +492,14 @@ function mostrarPedidos(pedidos) {
             precioHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
                     <span style="color: var(--primary); font-weight: bold; font-size: 1.2rem;">$${precioVal.toFixed(2)}</span>
-                    <button class="btn-icon" onclick="abrirModalAsignarPrecio('${pedido.id}')" title="Cambiar precio" style="background: #fff3cd; color: #856404;">
+                    <button class="btn-icon" onclick="abrirModalAsignarPrecio('${pedido.IdPedido}')" title="Cambiar precio" style="background: #fff3cd; color: #856404;">
                         <span class="material-symbols-outlined">edit</span>
                     </button>
                 </div>
             `;
         } else {
             precioHTML = `
-                <button onclick="abrirModalAsignarPrecio('${pedido.id}')"
+                <button onclick="abrirModalAsignarPrecio('${pedido.IdPedido}')"
                         style="padding: 0.8rem 1.2rem; background: var(--amarillo-bookart); color: var(--marron-texto); border: 3px solid var(--marron-texto); cursor: pointer; font-family: var(--font-body); font-weight: 700; border-radius: 8px; transition: all 0.3s ease; box-shadow: 3px 3px 0px var(--marron-texto); display: flex; align-items: center; gap: 0.5rem;"
                         onmouseover="this.style.transform='translate(2px, 2px)'; this.style.boxShadow='1px 1px 0px var(--marron-texto)';"
                         onmouseout="this.style.transform=''; this.style.boxShadow='3px 3px 0px var(--marron-texto)';">
@@ -513,12 +510,12 @@ function mostrarPedidos(pedidos) {
         }
         
         return `
-        <tr data-id="${pedido.id}">
-            <td><strong>#${String(pedido.id).padStart(5, '0')}</strong></td>
+        <tr data-id="${pedido.IdPedido}">
+            <td><strong>#${String(pedido.IdPedido).padStart(5, '0')}</strong></td>
             <td>
                 <div class="cliente-info">
-                    ${pedido.cliente_nombre || 'N/A'} ${pedido.paterno || ''} ${pedido.materno || ''}
-                    <span class="cliente-correo">${pedido.cliente_correo || 'N/A'}</span>
+                    ${pedido.ClienteNombre || 'N/A'}
+                    <span class="cliente-correo">${pedido.ClienteCorreo || 'N/A'}</span>
                 </div>
             </td>
             <td>
@@ -526,22 +523,22 @@ function mostrarPedidos(pedidos) {
                     ${tipoTexto}
                 </span>
             </td>
-            <td class="nombre-col">${pedido.producto_nombre || pedido.producto || 'N/A'}</td>
+            <td class="nombre-col">${pedido.Nombre || 'N/A'}</td>
             <td>
-                ${pedido.fecha}<br>
-                <small style="color: var(--text-secondary);">${pedido.hora}</small>
+                ${pedido.Fecha}<br>
+                <small style="color: var(--text-secondary);">${pedido.Hora}</small>
             </td>
             <td style="text-align: center;">${precioHTML}</td>
             <td>
                 <span class="pedido-estatus ${estatusClass}">
-                    ${estatusIcon} ${pedido.estatus}
+                    ${estatusIcon} ${pedido.Estatus}
                 </span>
             </td>
             <td class="acciones-col">
-                <button class="btn-icon btn-editar" onclick="verDetallePedido('${pedido.id}')" title="Ver detalle">
+                <button class="btn-icon btn-editar" onclick="verDetallePedido('${pedido.IdPedido}')" title="Ver detalle">
                     <span class="material-symbols-outlined">visibility</span>
                 </button>
-                <button class="btn-icon" onclick="cambiarEstatus('${pedido.id}', '${pedido.estatus}')" 
+                <button class="btn-icon" onclick="cambiarEstatus('${pedido.IdPedido}', '${pedido.Estatus}')" 
                         title="Cambiar estatus"
                         style="background: #e3f2fd; color: #1976d2;">
                     <span class="material-symbols-outlined">sync_alt</span>
@@ -595,13 +592,13 @@ function buscarEnPedidos() {
 function verDetallePedido(id) {
     console.log('👁️ Viendo detalle del pedido:', id);
 
-    fetch(api(`/api/pedidos?action=admin-detalle&id=${id}`))
+    fetch(api(`/pedidos/detalle?IdPedido=${id}`))
         .then(response => response.json())
         .then(data => {
             console.log('📋 Detalle recibido:', data);
-            
+
             if(data.success) {
-                mostrarDetallePedido(data.pedido);
+                mostrarDetallePedido(data.data.pedido);
             } else {
                 mostrarAlerta('Error al cargar detalle del pedido: ' + data.message, 'error');
             }
@@ -617,8 +614,8 @@ function mostrarDetallePedido(p) {
     const content = document.getElementById('detallePedidoContent');
     if (!modal || !content) return;
 
-    const idStr      = String(p.idPedido).padStart(5, '0');
-    const isCatalogo = (p.id_tipoPedido == 1);
+    const idStr      = String(p.IdPedido).padStart(5, '0');
+    const isCatalogo = (p.IdTipoPedido == 1);
 
     document.getElementById('modalPedidoTitulo').textContent =
         `Pedido #${idStr} - ${isCatalogo ? 'Catálogo' : 'Personalizada'}`;
@@ -633,7 +630,7 @@ function mostrarDetallePedido(p) {
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Fecha</span>
-                    <span class="detalle-value">${p.fecha} ${p.hora}</span>
+                    <span class="detalle-value">${p.Fecha} ${p.Hora}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Tipo</span>
@@ -641,7 +638,7 @@ function mostrarDetallePedido(p) {
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Estatus</span>
-                    <span class="detalle-value pedido-estatus estatus-${p.estatus.toLowerCase()}">${p.estatus}</span>
+                    <span class="detalle-value pedido-estatus estatus-${p.Estatus.toLowerCase()}">${p.Estatus}</span>
                 </div>
             </div>
         </div>
@@ -651,19 +648,19 @@ function mostrarDetallePedido(p) {
             <div class="detalle-grid">
                 <div class="detalle-item">
                     <span class="detalle-label">Nombre</span>
-                    <span class="detalle-value">${p.cliente_nombre || ''} ${p.paterno || ''} ${p.materno || ''}</span>
+                    <span class="detalle-value">${p.ClienteNombre || ''}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Correo</span>
-                    <span class="detalle-value">${p.cliente_correo || 'N/A'}</span>
+                    <span class="detalle-value">${p.ClienteCorreo || 'N/A'}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Teléfono</span>
-                    <span class="detalle-value">${p.cliente_tel || 'N/A'}</span>
+                    <span class="detalle-value">${p.ClienteTelefono || 'N/A'}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Usuario</span>
-                    <span class="detalle-value">${p.cliente_usuario || 'N/A'}</span>
+                    <span class="detalle-value">${p.ClienteUsuario || 'N/A'}</span>
                 </div>
             </div>
         </div>
@@ -674,61 +671,61 @@ function mostrarDetallePedido(p) {
 
     if (isCatalogo) {
         detalleHTML += `
-            ${p.producto_img ? `<div class="producto-preview"><img src="${p.producto_img}" alt="${p.producto_nombre}"></div>` : ''}
+            ${p.Imagen ? `<div class="producto-preview"><img src="${api(p.Imagen)}" alt="${p.Nombre}"></div>` : ''}
             <div class="detalle-grid">
                 <div class="detalle-item">
                     <span class="detalle-label">Nombre</span>
-                    <span class="detalle-value">${p.producto_nombre || 'N/A'}</span>
+                    <span class="detalle-value">${p.Nombre || 'N/A'}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Precio</span>
                     <span class="detalle-value" style="color: var(--primary); font-weight: bold; font-size: 1.5rem;">
-                        $${parseFloat(p.producto_precio || 0).toFixed(2)}
+                        $${parseFloat(p.Precio || 0).toFixed(2)}
                     </span>
                 </div>
             </div>
-            ${p.producto_descripcion ? `
+            ${p.Descripcion ? `
             <div class="detalle-item" style="margin-top: 1rem;">
                 <span class="detalle-label">Descripción</span>
-                <span class="detalle-value">${p.producto_descripcion}</span>
+                <span class="detalle-value">${p.Descripcion}</span>
             </div>` : ''}
         `;
     } else {
         detalleHTML += `
-            ${p.producto_img
-                ? `<div class="producto-preview"><img src="${p.producto_img}" alt="Diseño personalizado"></div>`
+            ${p.Imagen
+                ? `<div class="producto-preview"><img src="${api(p.Imagen)}" alt="Diseño personalizado"></div>`
                 : '<p style="text-align:center;color:var(--text-secondary);">Sin imagen de portada</p>'}
             <div class="detalle-grid">
                 <div class="detalle-item">
                     <span class="detalle-label">Tamaño</span>
-                    <span class="detalle-value">${p.tam || 'No especificado'}</span>
+                    <span class="detalle-value">${p.Tamano || 'No especificado'}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Tipo de Encuadernación</span>
-                    <span class="detalle-value">${p.tipo_encuadernacion || 'No especificado'}</span>
+                    <span class="detalle-value">${p.TipoEncuadernacion || 'No especificado'}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Tipo de Papel</span>
-                    <span class="detalle-value">${p.tipo_papel || 'No especificado'}</span>
+                    <span class="detalle-value">${p.TipoPapel || 'No especificado'}</span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Color</span>
                     <span class="detalle-value">
-                        ${p.color ? `<span style="display:inline-block;width:30px;height:30px;background:${p.color};border:2px solid var(--marron-texto);vertical-align:middle;margin-right:6px;"></span>` : ''}
-                        ${p.color || 'No especificado'}
+                        ${p.Color ? `<span style="display:inline-block;width:30px;height:30px;background:${p.Color};border:2px solid var(--marron-texto);vertical-align:middle;margin-right:6px;"></span>` : ''}
+                        ${p.Color || 'No especificado'}
                     </span>
                 </div>
                 <div class="detalle-item">
                     <span class="detalle-label">Precio</span>
                     <span class="detalle-value" style="color: var(--primary); font-weight: bold;">
-                        ${parseFloat(p.producto_precio || 0) > 0 ? '$' + parseFloat(p.producto_precio).toFixed(2) : 'A cotizar'}
+                        ${parseFloat(p.Precio || 0) > 0 ? '$' + parseFloat(p.Precio).toFixed(2) : 'A cotizar'}
                     </span>
                 </div>
             </div>
-            ${p.producto_descripcion ? `
+            ${p.Descripcion ? `
             <div class="detalle-item" style="margin-top: 1rem;">
                 <span class="detalle-label">Descripción del cliente</span>
-                <span class="detalle-value">${p.producto_descripcion}</span>
+                <span class="detalle-value">${p.Descripcion}</span>
             </div>` : ''}
         `;
     }
@@ -761,7 +758,7 @@ function cerrarModalEstatus() {
 }
 
 function actualizarContadorPedidos(pedidos) {
-    const pendientes = pedidos.filter(p => p.estatus.toLowerCase() === 'pendiente').length;
+    const pendientes = pedidos.filter(p => p.Estatus.toLowerCase() === 'pendiente').length;
     
     const statCards = document.querySelectorAll('.stat-card');
     statCards.forEach(card => {
@@ -776,9 +773,9 @@ function actualizarContadorPedidos(pedidos) {
 // ===== CERRAR SESIÓN =====
 async function closeSesion() {
     try {
-        await fetch(api('/api/auth?action=logout'), { method: 'POST' });
+        await fetch(api('/auth/salir'), { method: 'POST' });
     } catch {}
-    window.location.href = '/inicio-sesion';
+    window.location.href = api('/auth/entrar');
 }
 
 console.log('✅ logicaAdmin.js cargado correctamente');

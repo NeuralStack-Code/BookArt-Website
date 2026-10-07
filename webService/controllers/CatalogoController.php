@@ -1,119 +1,166 @@
 <?php
-
 /**
- * Recurso: catalogo.  Ruta: /api/catalogo (despacha por método: GET/POST/PUT/DELETE).
- * Listar es público; agregar/editar/eliminar son de admin.
+ * Catálogo de productos.
+ *   /catalogo/index     → pantalla del catálogo (pide sesión)
+ *   /catalogo/detalle   → pantalla de un producto (?IdProducto=)
+ *   /catalogo/listar    → los productos (panel del administrador)
+ *   /catalogo/obtener   → un producto (panel del administrador)
+ *   /catalogo/guardar   → alta o cambio, con su imagen (solo administrador)
+ *   /catalogo/eliminar  → baja (solo administrador)
+ * La URL anterior /extension-catalogo?id= redirige a /catalogo/detalle (index.php raíz).
  */
-class CatalogoController
+class CatalogoController extends Controller
 {
-    private CatalogoBusiness $cat;
+    /** Ver un producto y leer el catálogo no piden sesión. */
+    protected array $publicActions = ['detalle', 'listar', 'obtener'];
+    protected array $readActions   = ['index', 'detalle', 'listar', 'obtener'];
 
-    public function __construct(mysqli $conexion)
+    public function authorize(string $action): void
     {
-        $this->cat = new CatalogoBusiness($conexion);
+        // La pantalla del catálogo pide sesión: sin ella se va a entrar (no a un 401 en JSON).
+        if ($action === 'index' && $this->user() === null) $this->redirect('/auth/entrar');
+        parent::authorize($action);
     }
 
     public function index(): void
     {
-        match ($_SERVER['REQUEST_METHOD'] ?? 'GET') {
-            'GET'    => $this->listar(),
-            'POST'   => $this->agregar(),
-            'PUT'    => $this->editar(),
-            'DELETE' => $this->eliminar(),
-            default  => response(405, false, 'Método no permitido.'),
-        };
-    }
+        if ($this->isAdmin()) $this->redirect('/administrador');     // el administrador trabaja en su panel
 
-    private function listar(): void
-    {
-        $id = isset($_GET['id']) ? filter_var($_GET['id'], FILTER_VALIDATE_INT) : null;
-        if ($id) {
-            $producto = $this->cat->obtener($id);
-            if (!$producto) response(404, false, 'Producto no encontrado.');
-            response(200, true, 'OK', ['producto' => $producto]);
+        $this->api->command('Catalogo', 'Catalogo', 'List');
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->view('user/Catalogo', ['productos' => Producto::fromTable($result->table())]);
+        } else {
+            $this->failure($result);
         }
-        response(200, true, 'OK', ['productos' => $this->cat->listarTodos()]);
     }
 
-    private function agregar(): void
+    public function detalle(int $IdProducto = 0): void
     {
-        requireAdmin();
-        $nombre      = trim($_POST['nombre']      ?? '');
-        $descripcion = trim($_POST['descripcion'] ?? '');
-        $precio      = trim($_POST['precio']      ?? '');
+        if ($this->isAdmin()) $this->redirect('/administrador');
 
-        if ($nombre === '' || $descripcion === '' || $precio === '') response(422, false, 'Nombre, descripción y precio son obligatorios.');
-        if (!is_numeric($precio) || $precio < 0)                     response(422, false, 'El precio no es válido.');
-        if ($this->cat->nombreExiste($nombre))                       response(409, false, 'Ya existe un producto con ese nombre.');
+        $this->api->command('Catalogo', 'Catalogo', 'Get');
+        $this->api->addParameter('IdProducto', 'I', $IdProducto);
+        $result = $this->api->execute();
+        if ($result->status()) $this->failure($result);
 
-        $imagen = '/wwwroot/catalogo/imgNoEncontrada.png';
-        if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
-            $r = $this->procesarImagen($_FILES['imagen']);
-            if (!$r['success']) response(422, false, $r['message']);
-            $imagen = $r['ruta'];
+        if ($result->row() === null) {
+            http_response_code(404);
+            $this->view('404');
+            return;
+        }
+        $this->view('user/Extension_Catalogo', ['producto' => Producto::fromRow($result->row())]);
+    }
+
+    public function listar(): void
+    {
+        $this->api->command('Catalogo', 'Catalogo', 'List');
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->success('OK', ['productos' => Producto::fromTable($result->table())]);
+        } else {
+            $this->failure($result);
+        }
+    }
+
+    public function obtener(int $IdProducto): void
+    {
+        $this->api->command('Catalogo', 'Catalogo', 'Get');
+        $this->api->addParameter('IdProducto', 'I', $IdProducto);
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            $this->ensure($result->row() !== null, 'Producto no encontrado.', 404);
+            $this->success('OK', ['producto' => Producto::fromRow($result->row())]);
+        } else {
+            $this->failure($result);
+        }
+    }
+
+    /** Sin IdProducto es un alta; con él, un cambio. $Precio llega aparte para revisar que sí sea un número. */
+    public function guardar(Producto $producto, string $Precio = ''): void
+    {
+        $this->requireAdmin();
+        $isNew = !$producto->IdProducto;
+        $file  = $_FILES['Imagen'] ?? null;
+
+        $this->ensure($producto->Nombre !== '' && $producto->Descripcion !== '' && $Precio !== '',
+                      'Nombre, descripción y precio son obligatorios.');
+        $this->ensure(is_numeric($Precio) && $producto->Precio >= 0, 'El precio no es válido.');
+        // Los tamaños son los de las columnas: lo que no cabe se rechaza aquí, no se recorta en la base.
+        $this->ensure((bool) preg_match('/^.{1,35}$/us', $producto->Nombre), 'El nombre admite máximo 35 caracteres.');
+        $this->ensure((bool) preg_match('/^.{1,500}$/us', $producto->Descripcion), 'La descripción admite máximo 500 caracteres.');
+        if (ImagenCatalogo::sent($file)) {
+            $problem = ImagenCatalogo::problem($file);
+            $this->ensure($problem === null, (string) $problem);
         }
 
-        if ($this->cat->crear($nombre, $descripcion, (float) $precio, $imagen)) response(201, true, 'Producto agregado exitosamente.');
-        response(500, false, 'Error al agregar el producto.');
-    }
-
-    private function editar(): void
-    {
-        requireAdmin();
-        $_PUT = [];
-        parse_str(file_get_contents('php://input'), $_PUT); // PHP no parsea PUT con FormData
-
-        $id          = isset($_PUT['id_producto']) ? intval($_PUT['id_producto']) : 0;
-        $nombre      = trim($_PUT['nombre']      ?? '');
-        $descripcion = trim($_PUT['descripcion'] ?? '');
-        $precio      = trim($_PUT['precio']      ?? '');
-
-        if ($id <= 0 || $nombre === '' || $descripcion === '' || $precio === '') response(422, false, 'ID, nombre, descripción y precio son obligatorios.');
-        if (!is_numeric($precio) || $precio < 0)                                 response(422, false, 'El precio no es válido.');
-        if ($this->cat->nombreExiste($nombre, $id))                              response(409, false, 'Ya existe otro producto con ese nombre.');
-
-        if ($this->cat->editar($id, $nombre, $descripcion, (float) $precio)) response(200, true, 'Producto actualizado exitosamente.');
-        response(500, false, 'Error al actualizar el producto.');
-    }
-
-    private function eliminar(): void
-    {
-        requireAdmin();
-        parse_str(file_get_contents('php://input'), $_DELETE);
-        $id = isset($_DELETE['id']) ? intval($_DELETE['id']) : 0;
-        if ($id <= 0) response(422, false, 'ID no válido.');
-
-        $row = $this->cat->obtenerImg($id);
-        if (!$row) response(404, false, 'Producto no encontrado.');
-
-        if ($this->cat->eliminar($id)) {
-            $img = $row['img'];
-            if ($img !== '/wwwroot/catalogo/imgNoEncontrada.png') {
-                $fs = dirname(__DIR__, 2) . $img;
-                if (file_exists($fs)) unlink($fs);
-            }
-            response(200, true, 'Producto eliminado exitosamente.');
+        // En un cambio se necesita la imagen que tiene hoy, para borrarla si llega una nueva.
+        $previousImage = null;
+        if (!$isNew) {
+            $this->api->command('Catalogo', 'Catalogo', 'Get');
+            $this->api->addParameter('IdProducto', 'I', $producto->IdProducto);
+            $result = $this->api->execute();
+            if ($result->status()) $this->failure($result);
+            $this->ensure($result->row() !== null, 'Producto no encontrado.', 404);
+            $previousImage = Producto::fromRow($result->row())->Imagen;
         }
-        response(500, false, 'Error al eliminar el producto.');
+
+        $newImage = null;
+        if (ImagenCatalogo::sent($file)) {
+            $newImage = ImagenCatalogo::store($file);
+            $this->ensure($newImage !== null, 'Error al guardar la imagen.', 500);
+        }
+
+        if ($isNew) {
+            $this->api->command('Catalogo', 'Catalogo', 'Insert');
+            $this->api->addParameter('Nombre',      'S', $producto->Nombre);
+            $this->api->addParameter('Descripcion', 'S', $producto->Descripcion);
+            $this->api->addParameter('Precio',      'N', $producto->Precio);
+            $this->api->addParameter('Imagen',      'S', $newImage ?? ImagenCatalogo::DEFAULT);
+        } else {
+            $this->api->command('Catalogo', 'Catalogo', 'Update');
+            $this->api->addParameter('IdProducto',  'I', $producto->IdProducto);
+            $this->api->addParameter('Nombre',      'S', $producto->Nombre);
+            $this->api->addParameter('Descripcion', 'S', $producto->Descripcion);
+            $this->api->addParameter('Precio',      'N', $producto->Precio);
+            $this->api->addParameter('Imagen',      'S', $newImage);          // vacío = conserva la que tiene
+        }
+        $result = $this->api->execute();
+
+        if (!$result->status()) {
+            if ($newImage !== null && $previousImage !== null) ImagenCatalogo::delete($previousImage);
+            if ($isNew) $this->success('Producto agregado exitosamente.', ['IdProducto' => $result->id()], 201);
+            $this->success('Producto actualizado exitosamente.');
+        } else {
+            if ($newImage !== null) ImagenCatalogo::delete($newImage);        // no se guardó: la imagen recién subida sobra
+            $this->failure($result);
+        }
     }
 
-    private function procesarImagen(array $file): array
+    public function eliminar(int $IdProducto): void
     {
-        if ($file['size'] > 3 * 1024 * 1024)
-            return ['success' => false, 'message' => 'La imagen no debe superar 3MB.'];
+        $this->requireAdmin();
 
-        $permitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-        if (!in_array($file['type'], $permitidos))
-            return ['success' => false, 'message' => 'Formato de imagen no válido.'];
+        $this->api->command('Catalogo', 'Catalogo', 'Get');
+        $this->api->addParameter('IdProducto', 'I', $IdProducto);
+        $result = $this->api->execute();
+        if ($result->status()) $this->failure($result);
+        $this->ensure($result->row() !== null, 'Producto no encontrado.', 404);
+        $producto = Producto::fromRow($result->row());
 
-        $ext     = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $nombre  = uniqid('producto_') . '.' . $ext;
-        $carpeta = dirname(__DIR__, 2) . '/wwwroot/catalogo/';
+        $this->api->command('Catalogo', 'Catalogo', 'Delete');
+        $this->api->addParameter('IdProducto', 'I', $IdProducto);
+        $result = $this->api->execute();
 
-        if (!is_dir($carpeta)) mkdir($carpeta, 0755, true);
-        if (!move_uploaded_file($file['tmp_name'], $carpeta . $nombre))
-            return ['success' => false, 'message' => 'Error al guardar la imagen.'];
-
-        return ['success' => true, 'ruta' => '/wwwroot/catalogo/' . $nombre];
+        if (!$result->status()) {
+            $this->ensure($result->affected() > 0, 'Producto no encontrado.', 404);
+            ImagenCatalogo::delete($producto->Imagen);
+            $this->success('Producto eliminado exitosamente.');
+        } else {
+            $this->failure($result);
+        }
     }
 }
